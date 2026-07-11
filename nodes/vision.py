@@ -242,3 +242,85 @@ def vision_vlm_describe(ctx: dict) -> dict:
     else:
         text = str(content or "").strip()
     return {"text": text, "report": f"VLM describe OK via {model}", "raw": payload}
+
+
+def _svg_multiline_text(lines: list[str], *, x: int, y: int, fill: str, size: int = 18, weight: int = 500) -> str:
+    tspans = "".join(
+        f'<tspan x="{x}" dy="{0 if index == 0 else size + 6}">{html.escape(line)}</tspan>'
+        for index, line in enumerate(lines)
+    )
+    return (
+        f'<text x="{x}" y="{y}" fill="{fill}" font-size="{size}" font-weight="{weight}" '
+        f'font-family="Inter, Arial">{tspans}</text>'
+    )
+
+
+@node(
+    name="VisionReasoningDashboard",
+    category=_CATEGORY,
+    description="Render a captured camera frame with the VLM's visible observations, evidence, uncertainty, and action.",
+    inputs={
+        "image": Image(default=""),
+        "answer": Text(default=""),
+        "prompt": Text(default=""),
+        "report": Text(default=""),
+        "title": Text(default="Blacknode Vision Reasoning"),
+    },
+    outputs={"dashboard": Image, "ready": Bool, "summary": Dict},
+)
+def vision_reasoning_dashboard(ctx: dict) -> dict:
+    image = str(ctx.get("image") or "").strip()
+    answer = str(ctx.get("answer") or "").strip()
+    prompt = str(ctx.get("prompt") or "").strip()
+    report = str(ctx.get("report") or "").strip()
+    title = str(ctx.get("title") or "Blacknode Vision Reasoning").strip()
+    image_kind = _image_kind(image)
+    ready = bool(answer) and "FAILED" not in report.upper()
+    status = "VLM READY" if ready else "WAITING FOR VLM"
+    color = "#18a058" if ready else "#f59e0b"
+
+    prompt_lines = _wrap_text(prompt or "No prompt yet.", width=70, max_lines=4)
+    answer_lines = _wrap_text(answer or "Cook the VLM node after the camera frame is captured.", width=70, max_lines=12)
+    report_lines = _wrap_text(report or "No VLM report yet.", width=70, max_lines=3)
+
+    if image_kind in {"data-url", "url"}:
+        image_svg = (
+            f'<image x="36" y="132" width="390" height="292" preserveAspectRatio="xMidYMid meet" '
+            f'href="{html.escape(image, quote=True)}"/>'
+        )
+    else:
+        image_svg = (
+            '<rect x="36" y="132" width="390" height="292" rx="10" fill="#0f172a" stroke="#334155"/>'
+            '<text x="92" y="284" fill="#94a3b8" font-size="18" font-family="Inter, Arial">No captured frame yet</text>'
+        )
+
+    prompt_y = 174
+    answer_y = prompt_y + 54 + len(prompt_lines) * 26
+    report_y = answer_y + 62 + len(answer_lines) * 26
+    height = max(620, report_y + max(1, len(report_lines)) * 24 + 56)
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="{height}" viewBox="0 0 1120 {height}">
+<rect width="1120" height="{height}" rx="18" fill="#111827"/>
+<rect x="24" y="24" width="1072" height="{height - 48}" rx="14" fill="#162033" stroke="#263449"/>
+<circle cx="58" cy="72" r="12" fill="{color}"/>
+<text x="82" y="79" fill="{color}" font-size="24" font-weight="800" font-family="Inter, Arial">{status}</text>
+<text x="36" y="116" fill="#e5edf7" font-size="30" font-weight="800" font-family="Inter, Arial">{html.escape(title)}</text>
+<rect x="36" y="132" width="390" height="292" rx="10" fill="#0b1020" stroke="#334155"/>
+{image_svg}
+<text x="36" y="462" fill="#94a3b8" font-size="16" font-family="Inter, Arial">captured frame: {html.escape(image_kind)}</text>
+<text x="460" y="150" fill="#94a3b8" font-size="16" font-weight="800" font-family="Inter, Arial">PROMPT</text>
+{_svg_multiline_text(prompt_lines, x=460, y=prompt_y, fill="#dbeafe", size=17, weight=500)}
+<text x="460" y="{answer_y - 24}" fill="#94a3b8" font-size="16" font-weight="800" font-family="Inter, Arial">VISIBLE REASONING</text>
+{_svg_multiline_text(answer_lines, x=460, y=answer_y, fill="#e5edf7", size=18, weight=600)}
+<text x="460" y="{report_y - 24}" fill="#94a3b8" font-size="16" font-weight="800" font-family="Inter, Arial">MODEL REPORT</text>
+{_svg_multiline_text(report_lines, x=460, y=report_y, fill="#cbd5e1", size=16, weight=500)}
+</svg>"""
+    return {
+        "dashboard": _svg_data(svg),
+        "ready": ready,
+        "summary": {
+            "ready": ready,
+            "image_kind": image_kind,
+            "answer_chars": len(answer),
+            "report": report,
+        },
+    }

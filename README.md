@@ -59,6 +59,7 @@ rotation:=0
 | `VisionFramePrompt` | Builds a concise robot-vision prompt for one camera frame |
 | `VisionStreamStatus` | Renders live camera stream readiness as a dashboard image |
 | `VisionVLMDescribe` | Sends one image frame to an OpenAI-compatible vision chat endpoint |
+| `VisionReasoningDashboard` | Shows the captured frame with the VLM's visible observations, evidence, uncertainty, and next action |
 
 ## Templates
 
@@ -66,6 +67,9 @@ rotation:=0
   stream `/camera/image_raw`, and show a live status dashboard.
 - **Blacknode Vision Frame VLM** — capture one ROS 2 camera frame, show it on
   the canvas, and send it to a VLM endpoint.
+- **Blacknode Vision Live VLM Reasoning** — start the USB camera, keep the live
+  stream visible, capture one frame, call the VLM, and render a reasoning
+  dashboard beside the image.
 
 For the common case, `./start.sh` auto-sources `/opt/ros/jazzy/setup.bash` and
 auto-sources a ROS workspace when it finds exactly one `ros2_ws/install/setup.bash`.
@@ -102,6 +106,10 @@ export VISION_API_KEY=...
 
 Local OpenAI-compatible endpoints on `localhost` or `127.0.0.1` can run without
 an API key.
+
+The live reasoning template uses a snapshot for inference, not the MJPEG stream
+itself. The stream stays live for humans; each Run/cook captures a current frame
+and sends that frame to the VLM.
 
 ## Development
 

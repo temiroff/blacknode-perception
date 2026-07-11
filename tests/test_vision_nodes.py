@@ -11,6 +11,7 @@ TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "templates"
 
 EXPECTED_NODES = [
     "VisionFramePrompt",
+    "VisionReasoningDashboard",
     "VisionStreamStatus",
     "VisionVLMDescribe",
 ]
@@ -78,6 +79,20 @@ def test_stream_status_wraps_long_dashboard_text():
     assert "<tspan" in svg
     assert 'height="380"' not in svg
     assert "/camera/image_raw is discoverable" in svg
+
+
+def test_reasoning_dashboard_includes_image_and_answer():
+    result = _NODE_REGISTRY["VisionReasoningDashboard"]({
+        "image": "data:image/jpeg;base64,abc",
+        "prompt": "Describe what the robot sees.",
+        "answer": "Summary: a workbench is visible. Evidence: flat surface and tools. Next action: wait.",
+        "report": "VLM describe OK via test-model",
+    })
+    svg = base64.b64decode(result["dashboard"].split(",", 1)[1]).decode("utf-8")
+    assert result["ready"] is True
+    assert "VISIBLE REASONING" in svg
+    assert "Summary:" in svg
+    assert "data:image/jpeg;base64,abc" in svg
 
 
 def test_vlm_describe_requires_image():
