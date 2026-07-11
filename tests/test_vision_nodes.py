@@ -475,6 +475,8 @@ def test_cube_template_uses_live_cv2_stream_and_qwen3():
     assert workflow["node_meta"]["live_reason"]["type"] == "VisionReasoningStream"
     assert workflow["node_meta"]["live_reason"]["params"]["model"] == "qwen3-vl:4b"
     assert workflow["node_meta"]["live_reason"]["params"]["max_tokens"] == 4096
+    assert workflow["node_meta"]["live_reason"]["params"]["interval_seconds"] == 3.0
+    assert workflow["node_meta"]["live_reason"]["params"]["max_fps"] == 4.0
     assert "Describe what you see" in workflow["node_meta"]["live_reason"]["params"]["prompt"]
     assert "Do not rely on CV2 detections" in workflow["node_meta"]["live_reason"]["params"]["system"]
     edges = {
