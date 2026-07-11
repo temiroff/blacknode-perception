@@ -1,0 +1,12 @@
+[package]
+name = "blacknode-vision"
+version = "0.1.0"
+description = "Vision workflows for ROS 2 cameras, live previews, frame prompts, and VLM inspection."
+requires-blacknode = ">=0.1.0"
+
+[categories]
+"Vision" = "#18a058"
+
+[dependencies]
+pip = []
+imports = []
