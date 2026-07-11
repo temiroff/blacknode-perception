@@ -6,7 +6,8 @@ requires-blacknode = ">=0.1.0"
 
 [categories]
 "Vision" = "#18a058"
+"CV2" = "#2563eb"
 
 [dependencies]
-pip = []
-imports = []
+pip = ["opencv-python>=4.8", "numpy>=1.24"]
+imports = ["cv2", "numpy"]

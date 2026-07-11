@@ -6,7 +6,8 @@ This is a separate Blacknode extension package. It does not replace
 `blacknode-ros2`; it builds on it. ROS 2 handles camera transport, topic
 inspection, snapshots, and streams. `blacknode-vision` adds vision-specific
 workflow pieces: a bundled generic USB camera ROS 2 node, camera consoles,
-frame prompts, stream dashboards, and optional VLM inspection.
+frame prompts, stream dashboards, OpenCV tracking, and optional VLM/LLM
+inspection.
 
 ## Install
 
@@ -57,9 +58,13 @@ rotation:=0
 | Node | What it does |
 |---|---|
 | `VisionFramePrompt` | Builds a concise robot-vision prompt for one camera frame |
+| `VisionDetectionPrompt` | Builds an LLM prompt from CV2 detections for local reasoning |
 | `VisionStreamStatus` | Renders live camera stream readiness as a dashboard image |
-| `VisionVLMDescribe` | Sends one image frame to an OpenAI-compatible vision chat endpoint |
+| `VisionVLMDescribe` | Sends one image frame or text-only detection prompt to OpenAI-compatible, Anthropic, or local Ollama chat |
 | `VisionReasoningDashboard` | Shows the captured frame with the VLM's visible observations, evidence, uncertainty, and next action |
+| `CV2HSVMask` | Creates an HSV color mask from a Blacknode image |
+| `CV2ColorObjectTracker` | Tracks colored objects such as cubes and returns overlay, mask, center, area, and detections |
+| `CV2TrackerPythonExport` | Generates a standalone OpenCV tracker script for robot deployment experiments |
 
 ## Templates
 
@@ -70,6 +75,9 @@ rotation:=0
 - **Blacknode Vision Live VLM Reasoning** — start the USB camera, keep the live
   stream visible, capture one frame, call the VLM, and render a reasoning
   dashboard beside the image.
+- **Blacknode Vision CV2 Cube Local Reasoning** — start the USB camera, track a
+  colored cube with OpenCV, reason over detection JSON with local Ollama/Qwen,
+  and generate a standalone Python tracker.
 
 For the common case, `./start.sh` auto-sources `/opt/ros/jazzy/setup.bash` and
 auto-sources a ROS workspace when it finds exactly one `ros2_ws/install/setup.bash`.
@@ -93,23 +101,51 @@ expected_topic: /camera/image_raw
 For a different camera index, edit `ROS2Run.arguments`, for example
 `-p device:=1`.
 
-## VLM endpoint
+## VLM and LLM endpoints
 
-`VisionVLMDescribe` calls an OpenAI-compatible `/chat/completions` endpoint with
-one image. For hosted endpoints, set one of these environment variables before
-starting Blacknode:
+`VisionVLMDescribe` supports three providers:
+
+| Provider | Endpoint | Key |
+|---|---|---|
+| `openai-compatible` | `/chat/completions` | `VISION_API_KEY`, `OPENAI_API_KEY`, or `NVIDIA_API_KEY` |
+| `anthropic` | `/messages` | `ANTHROPIC_API_KEY` or `VISION_API_KEY` |
+| `ollama` | `/api/chat` | no key for local Ollama |
+
+For hosted endpoints, set the key before starting Blacknode:
 
 ```bash
 export VISION_API_KEY=...
-# or OPENAI_API_KEY / NVIDIA_API_KEY
+# or OPENAI_API_KEY / NVIDIA_API_KEY / ANTHROPIC_API_KEY
 ```
 
-Local OpenAI-compatible endpoints on `localhost` or `127.0.0.1` can run without
-an API key.
+Local Ollama defaults to:
+
+```text
+provider: ollama
+endpoint_url: http://127.0.0.1:11434
+model: qwen2.5vl:7b
+```
+
+If your installed Ollama model is text-only, keep `allow_text_only` enabled and
+feed it a `VisionDetectionPrompt` from CV2 detections. If your model is a true
+local VLM, connect the camera snapshot image into `VisionVLMDescribe.image`.
 
 The live reasoning template uses a snapshot for inference, not the MJPEG stream
 itself. The stream stays live for humans; each Run/cook captures a current frame
 and sends that frame to the VLM.
+
+## CV2 tracking
+
+The cube tracker uses HSV thresholds. The default range is tuned for green:
+
+```text
+lower_hsv: 35,60,60
+upper_hsv: 85,255,255
+```
+
+Change those values for red, blue, or other cube colors. `CV2ColorObjectTracker`
+returns structured detections, so the same prototype can drive a local LLM,
+robot control node, dashboard, or Python export.
 
 ## Development
 

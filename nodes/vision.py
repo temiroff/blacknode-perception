@@ -9,15 +9,19 @@ from __future__ import annotations
 import base64
 import html
 import json
+import mimetypes
 import os
+from pathlib import Path
 import textwrap
 import urllib.error
 import urllib.request
 from typing import Any
 
-from blacknode.node import Bool, Dict, Float, Image, Int, Text, node
+from blacknode.node import Bool, Dict, Enum, Float, Image, Int, List, Text, node
 
 _CATEGORY = "Vision"
+_OPENAI_COMPATIBLE_DEFAULT_ENDPOINT = "https://api.openai.com/v1"
+_OPENAI_COMPATIBLE_DEFAULT_MODEL = "gpt-4o-mini"
 
 
 def _image_kind(value: str) -> str:
@@ -59,6 +63,97 @@ def _wrap_text(value: Any, width: int = 68, max_lines: int = 3) -> list[str]:
 def _svg_data(svg: str) -> str:
     encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
     return f"data:image/svg+xml;base64,{encoded}"
+
+
+def _normal_provider(value: Any, endpoint_url: str = "") -> str:
+    raw = str(value or "openai-compatible").strip().lower().replace("_", "-")
+    if raw in {"openai", "openai-compatible", "nvidia", "nim", "openrouter"}:
+        return "openai-compatible"
+    if raw in {"anthropic", "claude"}:
+        return "anthropic"
+    if raw in {"ollama", "local", "local-ollama"}:
+        return "ollama"
+    if raw == "auto":
+        endpoint = endpoint_url.lower()
+        if "11434" in endpoint or "ollama" in endpoint:
+            return "ollama"
+        if "anthropic.com" in endpoint:
+            return "anthropic"
+        return "openai-compatible"
+    return "openai-compatible"
+
+
+def _default_model(provider: str, model: str) -> str:
+    raw = model.strip()
+    if raw and not (provider != "openai-compatible" and raw == _OPENAI_COMPATIBLE_DEFAULT_MODEL):
+        return model.strip()
+    if provider == "anthropic":
+        return "claude-sonnet-4-5"
+    if provider == "ollama":
+        return "qwen2.5vl:7b"
+    return _OPENAI_COMPATIBLE_DEFAULT_MODEL
+
+
+def _default_endpoint(provider: str, endpoint_url: str) -> str:
+    endpoint = endpoint_url.strip().rstrip("/")
+    if endpoint and not (provider != "openai-compatible" and endpoint == _OPENAI_COMPATIBLE_DEFAULT_ENDPOINT):
+        return endpoint
+    if provider == "anthropic":
+        return "https://api.anthropic.com/v1"
+    if provider == "ollama":
+        return "http://127.0.0.1:11434"
+    return _OPENAI_COMPATIBLE_DEFAULT_ENDPOINT
+
+
+def _read_url_bytes(url: str) -> tuple[bytes, str]:
+    req = urllib.request.Request(url, headers={"User-Agent": "BlacknodeVision/0.1"})
+    with urllib.request.urlopen(req, timeout=30) as response:
+        media_type = response.headers.get_content_type() or "image/jpeg"
+        return response.read(), media_type
+
+
+def _image_data_parts(image: str) -> tuple[str, str, str]:
+    """Return (media_type, base64_data, source_kind) for data URL, URL, or path."""
+    value = image.strip()
+    if value.startswith("data:"):
+        header, data = value.split(",", 1)
+        media_type = header[5:].split(";", 1)[0] or "image/jpeg"
+        return media_type, data, "data-url"
+    if value.startswith(("http://", "https://")):
+        raw, media_type = _read_url_bytes(value)
+        return media_type, base64.b64encode(raw).decode("ascii"), "url"
+
+    path = Path(value).expanduser()
+    raw = path.read_bytes()
+    media_type = mimetypes.guess_type(str(path))[0] or "image/jpeg"
+    return media_type, base64.b64encode(raw).decode("ascii"), "path"
+
+
+def _anthropic_image_source(image: str) -> dict[str, Any]:
+    value = image.strip()
+    if value.startswith(("http://", "https://")):
+        return {"type": "url", "url": value}
+    media_type, data, _kind = _image_data_parts(value)
+    return {"type": "base64", "media_type": media_type, "data": data}
+
+
+def _extract_anthropic_text(payload: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for item in payload.get("content") or []:
+        if isinstance(item, dict) and item.get("type") == "text":
+            parts.append(str(item.get("text") or ""))
+    return "\n".join(part.strip() for part in parts if part.strip()).strip()
+
+
+def _post_json(url: str, body: dict[str, Any], headers: dict[str, str], timeout: float = 90.0) -> dict[str, Any]:
+    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _format_http_error(exc: urllib.error.HTTPError, limit: int = 300) -> str:
+    detail = exc.read().decode("utf-8", errors="replace")
+    return f"HTTP {exc.code}: {_clip(detail, limit)}"
 
 
 @node(
@@ -104,6 +199,52 @@ def vision_frame_prompt(ctx: dict) -> dict:
             "context": context,
             "robot_task": robot_task,
             "safety_checks": include_safety,
+        },
+    }
+
+
+@node(
+    name="VisionDetectionPrompt",
+    category=_CATEGORY,
+    description="Build an LLM prompt from CV2 detections so local text models can reason about robot actions.",
+    inputs={
+        "detection": Dict(default={}),
+        "detections": List(default=[]),
+        "question": Text(default="What should the robot do next?"),
+        "context": Text(default=""),
+        "robot_task": Text(default="track and approach the visible target"),
+    },
+    outputs={"prompt": Text, "summary": Dict},
+)
+def vision_detection_prompt(ctx: dict) -> dict:
+    detection = ctx.get("detection") if isinstance(ctx.get("detection"), dict) else {}
+    detections = ctx.get("detections") if isinstance(ctx.get("detections"), list) else []
+    question = str(ctx.get("question") or "What should the robot do next?").strip()
+    context = str(ctx.get("context") or "").strip()
+    robot_task = str(ctx.get("robot_task") or "").strip()
+    payload = {
+        "primary_detection": detection,
+        "detections": detections,
+    }
+    parts = [
+        "You are a robot vision planner using structured CV2 detections.",
+        "Do not invent objects that are not present in the detections.",
+    ]
+    if context:
+        parts.append(f"Scene/context: {context}")
+    if robot_task:
+        parts.append(f"Robot task: {robot_task}")
+    parts.append("Detection data:")
+    parts.append(json.dumps(payload, indent=2, sort_keys=True))
+    parts.append(f"Question: {question}")
+    parts.append("Return a concise state summary, confidence, and next robot action.")
+    return {
+        "prompt": "\n".join(parts),
+        "summary": {
+            "found": bool(detection.get("found")) if isinstance(detection, dict) else False,
+            "detection_count": len(detections),
+            "question": question,
+            "robot_task": robot_task,
         },
     }
 
@@ -171,68 +312,146 @@ def vision_stream_status(ctx: dict) -> dict:
 @node(
     name="VisionVLMDescribe",
     category=_CATEGORY,
-    description="Describe one image with an OpenAI-compatible vision chat endpoint.",
+    description="Describe one image or detection prompt with OpenAI-compatible, Anthropic, or local Ollama chat.",
     inputs={
         "image": Image(default=""),
         "question": Text(default="What do you see?"),
         "system": Text(default="You are a precise robot vision assistant. Describe only what is visible."),
+        "provider": Enum(["openai-compatible", "anthropic", "ollama", "auto"], default="openai-compatible"),
         "model": Text(default="gpt-4o-mini"),
         "endpoint_url": Text(default="https://api.openai.com/v1"),
         "api_key": Text(default=""),
         "max_tokens": Int(default=512),
         "temperature": Float(default=0.2),
+        "allow_text_only": Bool(default=False),
     },
     outputs={"text": Text, "report": Text, "raw": Dict},
 )
 def vision_vlm_describe(ctx: dict) -> dict:
     image = str(ctx.get("image") or "").strip()
-    if _image_kind(image) not in {"data-url", "url"}:
-        return {"text": "", "report": "VLM describe FAILED: provide a data:image or http(s) image URL", "raw": {}}
-
-    endpoint = str(ctx.get("endpoint_url") or "https://api.openai.com/v1").rstrip("/")
-    url = endpoint + "/chat/completions"
-    model = str(ctx.get("model") or "gpt-4o-mini").strip()
     question = str(ctx.get("question") or "What do you see?").strip()
     system = str(ctx.get("system") or "").strip()
-    api_key = (
-        str(ctx.get("api_key") or "").strip()
-        or os.environ.get("VISION_API_KEY", "").strip()
-        or os.environ.get("OPENAI_API_KEY", "").strip()
-        or os.environ.get("NVIDIA_API_KEY", "").strip()
-    )
-    local_endpoint = endpoint.startswith(("http://127.0.0.1", "http://localhost"))
-    if not api_key and not local_endpoint:
+    provider = _normal_provider(ctx.get("provider"), str(ctx.get("endpoint_url") or ""))
+    endpoint = _default_endpoint(provider, str(ctx.get("endpoint_url") or ""))
+    model = _default_model(provider, str(ctx.get("model") or ""))
+    max_tokens = max(1, min(int(ctx.get("max_tokens") or 512), 8192))
+    temperature = float(ctx.get("temperature") or 0.2)
+    allow_text_only = bool(ctx.get("allow_text_only", False))
+    image_kind = _image_kind(image)
+    has_image = image_kind in {"data-url", "url", "path-or-text"}
+
+    if not image and not allow_text_only:
         return {
             "text": "",
-            "report": "VLM describe FAILED: set api_key or VISION_API_KEY/OPENAI_API_KEY/NVIDIA_API_KEY",
+            "report": "VLM describe FAILED: provide an image or enable allow_text_only for LLM-only reasoning",
             "raw": {},
         }
 
-    body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": question},
-                    {"type": "image_url", "image_url": {"url": image}},
-                ],
-            },
-        ],
-        "max_tokens": max(1, min(int(ctx.get("max_tokens") or 512), 4096)),
-        "temperature": float(ctx.get("temperature") or 0.2),
-    }
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=60) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        if provider == "anthropic":
+            api_key = (
+                str(ctx.get("api_key") or "").strip()
+                or os.environ.get("ANTHROPIC_API_KEY", "").strip()
+                or os.environ.get("VISION_API_KEY", "").strip()
+            )
+            if not api_key:
+                return {
+                    "text": "",
+                    "report": "VLM describe FAILED: set api_key or ANTHROPIC_API_KEY/VISION_API_KEY for Anthropic",
+                    "raw": {},
+                }
+            content: list[dict[str, Any]] = []
+            if image:
+                content.append({"type": "image", "source": _anthropic_image_source(image)})
+            content.append({"type": "text", "text": question})
+            body: dict[str, Any] = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": [{"role": "user", "content": content}],
+            }
+            if system:
+                body["system"] = system
+            payload = _post_json(
+                endpoint + "/messages",
+                body,
+                {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+            )
+            text = _extract_anthropic_text(payload)
+            return {"text": text, "report": f"VLM describe OK via anthropic/{model}", "raw": payload}
+
+        if provider == "ollama":
+            message: dict[str, Any] = {"role": "user", "content": question}
+            if image:
+                _media_type, image_data, _source_kind = _image_data_parts(image)
+                message["images"] = [image_data]
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append(message)
+            body = {
+                "model": model,
+                "messages": messages,
+                "stream": False,
+                "options": {
+                    "temperature": temperature,
+                    "num_predict": max_tokens,
+                },
+            }
+            headers = {"Content-Type": "application/json"}
+            api_key = str(ctx.get("api_key") or "").strip() or os.environ.get("OLLAMA_API_KEY", "").strip()
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            payload = _post_json(endpoint + "/api/chat", body, headers, timeout=180.0)
+            text = str((payload.get("message") or {}).get("content") or "").strip()
+            return {"text": text, "report": f"VLM describe OK via ollama/{model}", "raw": payload}
+
+        if has_image and image_kind not in {"data-url", "url"}:
+            media_type, image_data, _source_kind = _image_data_parts(image)
+            image_for_request = f"data:{media_type};base64,{image_data}"
+        else:
+            image_for_request = image
+        api_key = (
+            str(ctx.get("api_key") or "").strip()
+            or os.environ.get("VISION_API_KEY", "").strip()
+            or os.environ.get("OPENAI_API_KEY", "").strip()
+            or os.environ.get("NVIDIA_API_KEY", "").strip()
+        )
+        local_endpoint = endpoint.startswith(("http://127.0.0.1", "http://localhost"))
+        if not api_key and not local_endpoint:
+            return {
+                "text": "",
+                "report": "VLM describe FAILED: set api_key or VISION_API_KEY/OPENAI_API_KEY/NVIDIA_API_KEY",
+                "raw": {},
+            }
+        user_content: Any
+        if image_for_request:
+            user_content = [
+                {"type": "text", "text": question},
+                {"type": "image_url", "image_url": {"url": image_for_request}},
+            ]
+        else:
+            user_content = question
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": user_content})
+        body = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        payload = _post_json(endpoint + "/chat/completions", body, headers)
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        return {"text": "", "report": f"VLM describe FAILED: HTTP {exc.code}: {_clip(detail, 240)}", "raw": {}}
+        return {"text": "", "report": f"VLM describe FAILED: {_format_http_error(exc)}", "raw": {}}
     except Exception as exc:  # noqa: BLE001
         return {"text": "", "report": f"VLM describe FAILED: {type(exc).__name__}: {exc}", "raw": {}}
 
@@ -241,7 +460,7 @@ def vision_vlm_describe(ctx: dict) -> dict:
         text = "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict)).strip()
     else:
         text = str(content or "").strip()
-    return {"text": text, "report": f"VLM describe OK via {model}", "raw": payload}
+    return {"text": text, "report": f"VLM describe OK via openai-compatible/{model}", "raw": payload}
 
 
 def _svg_multiline_text(lines: list[str], *, x: int, y: int, fill: str, size: int = 18, weight: int = 500) -> str:

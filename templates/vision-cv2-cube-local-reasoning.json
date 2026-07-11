@@ -1,21 +1,21 @@
 {
   "kind": "blacknode.workflow",
   "schema_version": 1,
-  "name": "Blacknode Vision Live VLM Reasoning",
+  "name": "Blacknode Vision CV2 Cube Local Reasoning",
   "saved_at": "2026-07-10T00:00:00",
   "entrypoint": {
-    "node_id": "reasoning_out",
+    "node_id": "overlay_out",
     "port": "image"
   },
   "metadata": {
     "template": true,
-    "description": "Start the bundled USB camera, show a live stream, capture one frame, send it to a VLM, and render visible observations/evidence/action on a dashboard.",
-    "color": "#18a058",
+    "description": "Start the bundled USB camera, track a colored cube with OpenCV, reason over detections with local Ollama/Qwen, and generate a standalone Python tracker.",
+    "color": "#2563eb",
     "required_packages": [
       {
         "name": "blacknode-vision",
         "git_url": "https://github.com/temiroff/blacknode-vision.git",
-        "node_types": ["VisionFramePrompt", "VisionVLMDescribe", "VisionReasoningDashboard", "VisionStreamStatus"]
+        "node_types": ["CV2ColorObjectTracker", "CV2HSVMask", "CV2TrackerPythonExport", "VisionDetectionPrompt", "VisionVLMDescribe"]
       },
       "blacknode-ros2"
     ]
@@ -83,7 +83,7 @@
         "max_width": 960,
         "jpeg_quality": 80
       },
-      "pos": [740, 80],
+      "pos": [740, 60],
       "inputs": ["trigger", "action", "stream_id", "topic", "message_type", "host", "port", "max_fps", "max_width", "jpeg_quality"],
       "outputs": ["preview", "streaming", "stream_url", "snapshot_url", "stream_id", "report"],
       "input_types": {
@@ -131,7 +131,7 @@
         "output_format": "jpeg",
         "jpeg_quality": 82
       },
-      "pos": [740, 380],
+      "pos": [740, 360],
       "inputs": ["trigger", "topic", "timeout", "output_format", "jpeg_quality"],
       "outputs": ["image", "metadata", "report"],
       "input_types": {
@@ -150,46 +150,90 @@
       },
       "input_choices": {"output_format": ["png", "jpeg"]}
     },
-    "prompt": {
-      "id": "prompt",
-      "type": "VisionFramePrompt",
+    "tracker": {
+      "id": "tracker",
+      "type": "CV2ColorObjectTracker",
       "params": {
-        "question": "Describe what the robot sees. Include visible evidence, uncertainty, safety concerns, and the next useful robot action.",
-        "context": "Live Blacknode USB camera frame",
-        "robot_task": "understand the workspace before acting",
-        "include_safety_checks": true
+        "label": "cube",
+        "lower_hsv": "35,60,60",
+        "upper_hsv": "85,255,255",
+        "min_area": 300,
+        "max_detections": 3,
+        "blur": 5,
+        "morphology_iters": 1
       },
-      "pos": [1120, 360],
-      "inputs": ["image", "question", "context", "robot_task", "include_safety_checks"],
-      "outputs": ["prompt", "summary"],
+      "pos": [1120, 320],
+      "inputs": ["image", "label", "lower_hsv", "upper_hsv", "min_area", "max_detections", "blur", "morphology_iters"],
+      "outputs": ["overlay", "mask", "found", "center_x", "center_y", "area", "detection", "detections", "report"],
       "input_types": {
         "image": "Image",
+        "label": "Text",
+        "lower_hsv": "Text",
+        "upper_hsv": "Text",
+        "min_area": "Int",
+        "max_detections": "Int",
+        "blur": "Int",
+        "morphology_iters": "Int"
+      },
+      "output_types": {
+        "overlay": "Image",
+        "mask": "Image",
+        "found": "Bool",
+        "center_x": "Int",
+        "center_y": "Int",
+        "area": "Float",
+        "detection": "Dict",
+        "detections": "List",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "label": "cube",
+        "lower_hsv": "35,60,60",
+        "upper_hsv": "85,255,255",
+        "min_area": 300,
+        "max_detections": 3,
+        "blur": 5,
+        "morphology_iters": 1
+      }
+    },
+    "detection_prompt": {
+      "id": "detection_prompt",
+      "type": "VisionDetectionPrompt",
+      "params": {
+        "question": "Where is the cube, how confident are we, and what should the robot do next?",
+        "context": "CV2 color tracker over a live USB camera frame",
+        "robot_task": "track the cube and prepare a safe next movement"
+      },
+      "pos": [1500, 470],
+      "inputs": ["detection", "detections", "question", "context", "robot_task"],
+      "outputs": ["prompt", "summary"],
+      "input_types": {
+        "detection": "Dict",
+        "detections": "List",
         "question": "Text",
         "context": "Text",
-        "robot_task": "Text",
-        "include_safety_checks": "Bool"
+        "robot_task": "Text"
       },
       "output_types": {"prompt": "Text", "summary": "Dict"},
       "input_defaults": {
-        "question": "Describe what the robot sees. Include visible evidence, uncertainty, safety concerns, and the next useful robot action.",
-        "context": "Live Blacknode USB camera frame",
-        "robot_task": "understand the workspace before acting",
-        "include_safety_checks": true
+        "question": "Where is the cube, how confident are we, and what should the robot do next?",
+        "context": "CV2 color tracker over a live USB camera frame",
+        "robot_task": "track the cube and prepare a safe next movement"
       }
     },
-    "vlm": {
-      "id": "vlm",
+    "local_reason": {
+      "id": "local_reason",
       "type": "VisionVLMDescribe",
       "params": {
-        "provider": "openai-compatible",
-        "model": "gpt-4o-mini",
-        "endpoint_url": "https://api.openai.com/v1",
+        "provider": "ollama",
+        "model": "qwen2.5vl:7b",
+        "endpoint_url": "http://127.0.0.1:11434",
         "api_key": "",
-        "max_tokens": 700,
+        "max_tokens": 512,
         "temperature": 0.2,
-        "allow_text_only": false
+        "allow_text_only": true
       },
-      "pos": [1490, 360],
+      "pos": [1870, 470],
       "inputs": ["image", "question", "system", "provider", "model", "endpoint_url", "api_key", "max_tokens", "temperature", "allow_text_only"],
       "outputs": ["text", "report", "raw"],
       "input_types": {
@@ -206,34 +250,55 @@
       },
       "output_types": {"text": "Text", "report": "Text", "raw": "Dict"},
       "input_defaults": {
-        "question": "What do you see?",
-        "system": "You are a precise robot vision assistant. Do not invent details. Return visible observations, supporting evidence, uncertainty, safety notes, and one next action.",
-        "provider": "openai-compatible",
-        "model": "gpt-4o-mini",
-        "endpoint_url": "https://api.openai.com/v1",
+        "question": "What should the robot do next?",
+        "system": "You are a robot vision assistant. Use only the provided CV2 detections. Return state, confidence, and one next action.",
+        "provider": "ollama",
+        "model": "qwen2.5vl:7b",
+        "endpoint_url": "http://127.0.0.1:11434",
         "api_key": "",
-        "max_tokens": 700,
+        "max_tokens": 512,
         "temperature": 0.2,
-        "allow_text_only": false
+        "allow_text_only": true
       },
       "input_choices": {"provider": ["openai-compatible", "anthropic", "ollama", "auto"]}
     },
-    "reasoning": {
-      "id": "reasoning",
-      "type": "VisionReasoningDashboard",
-      "params": {"title": "Blacknode Vision Reasoning"},
-      "pos": [1880, 250],
-      "inputs": ["image", "answer", "prompt", "report", "title"],
-      "outputs": ["dashboard", "ready", "summary"],
-      "input_types": {
-        "image": "Image",
-        "answer": "Text",
-        "prompt": "Text",
-        "report": "Text",
-        "title": "Text"
+    "python_export": {
+      "id": "python_export",
+      "type": "CV2TrackerPythonExport",
+      "params": {
+        "label": "cube",
+        "lower_hsv": "35,60,60",
+        "upper_hsv": "85,255,255",
+        "min_area": 300,
+        "camera_device": 0,
+        "width": 640,
+        "height": 480,
+        "show_preview": true
       },
-      "output_types": {"dashboard": "Image", "ready": "Bool", "summary": "Dict"},
-      "input_defaults": {"title": "Blacknode Vision Reasoning"}
+      "pos": [1500, 800],
+      "inputs": ["label", "lower_hsv", "upper_hsv", "min_area", "camera_device", "width", "height", "show_preview"],
+      "outputs": ["source", "report"],
+      "input_types": {
+        "label": "Text",
+        "lower_hsv": "Text",
+        "upper_hsv": "Text",
+        "min_area": "Int",
+        "camera_device": "Int",
+        "width": "Int",
+        "height": "Int",
+        "show_preview": "Bool"
+      },
+      "output_types": {"source": "Text", "report": "Text"},
+      "input_defaults": {
+        "label": "cube",
+        "lower_hsv": "35,60,60",
+        "upper_hsv": "85,255,255",
+        "min_area": 300,
+        "camera_device": 0,
+        "width": 640,
+        "height": 480,
+        "show_preview": true
+      }
     },
     "stream_out": {
       "id": "stream_out",
@@ -246,44 +311,66 @@
       "output_types": {"image": "Image"},
       "input_defaults": {}
     },
-    "snapshot_out": {
-      "id": "snapshot_out",
+    "overlay_out": {
+      "id": "overlay_out",
       "type": "OutputImage",
       "params": {},
-      "pos": [1120, 650],
+      "pos": [1500, 250],
       "inputs": ["image"],
       "outputs": ["image"],
       "input_types": {"image": "Image"},
       "output_types": {"image": "Image"},
       "input_defaults": {}
     },
-    "reasoning_out": {
-      "id": "reasoning_out",
+    "mask_out": {
+      "id": "mask_out",
       "type": "OutputImage",
       "params": {},
-      "pos": [2280, 250],
+      "pos": [1500, 80],
       "inputs": ["image"],
       "outputs": ["image"],
       "input_types": {"image": "Image"},
       "output_types": {"image": "Image"},
       "input_defaults": {}
     },
-    "answer_out": {
-      "id": "answer_out",
+    "detection_out": {
+      "id": "detection_out",
       "type": "Output",
-      "params": {"label": "VLM visible reasoning"},
-      "pos": [2280, 620],
+      "params": {"label": "CV2 detection"},
+      "pos": [1500, 650],
       "inputs": ["value"],
       "outputs": [],
       "input_types": {"value": "Any"},
       "output_types": {},
       "input_defaults": {}
     },
-    "report_out": {
-      "id": "report_out",
+    "reason_out": {
+      "id": "reason_out",
       "type": "Output",
-      "params": {"label": "VLM report"},
-      "pos": [2280, 820],
+      "params": {"label": "Local reasoning"},
+      "pos": [2240, 470],
+      "inputs": ["value"],
+      "outputs": [],
+      "input_types": {"value": "Any"},
+      "output_types": {},
+      "input_defaults": {}
+    },
+    "reason_report_out": {
+      "id": "reason_report_out",
+      "type": "Output",
+      "params": {"label": "Local reasoning report"},
+      "pos": [2240, 660],
+      "inputs": ["value"],
+      "outputs": [],
+      "input_types": {"value": "Any"},
+      "output_types": {},
+      "input_defaults": {}
+    },
+    "python_out": {
+      "id": "python_out",
+      "type": "Output",
+      "params": {"label": "Standalone Python tracker"},
+      "pos": [1870, 800],
       "inputs": ["value"],
       "outputs": [],
       "input_types": {"value": "Any"},
@@ -296,16 +383,15 @@
     {"from": "camera_run", "from_port": "report", "to": "stream", "to_port": "trigger"},
     {"from": "camera_run", "from_port": "report", "to": "snapshot", "to_port": "trigger"},
     {"from": "stream", "from_port": "preview", "to": "stream_out", "to_port": "image"},
-    {"from": "snapshot", "from_port": "image", "to": "prompt", "to_port": "image"},
-    {"from": "snapshot", "from_port": "image", "to": "vlm", "to_port": "image"},
-    {"from": "snapshot", "from_port": "image", "to": "snapshot_out", "to_port": "image"},
-    {"from": "snapshot", "from_port": "image", "to": "reasoning", "to_port": "image"},
-    {"from": "prompt", "from_port": "prompt", "to": "vlm", "to_port": "question"},
-    {"from": "prompt", "from_port": "prompt", "to": "reasoning", "to_port": "prompt"},
-    {"from": "vlm", "from_port": "text", "to": "reasoning", "to_port": "answer"},
-    {"from": "vlm", "from_port": "text", "to": "answer_out", "to_port": "value"},
-    {"from": "vlm", "from_port": "report", "to": "reasoning", "to_port": "report"},
-    {"from": "vlm", "from_port": "report", "to": "report_out", "to_port": "value"},
-    {"from": "reasoning", "from_port": "dashboard", "to": "reasoning_out", "to_port": "image"}
+    {"from": "snapshot", "from_port": "image", "to": "tracker", "to_port": "image"},
+    {"from": "tracker", "from_port": "overlay", "to": "overlay_out", "to_port": "image"},
+    {"from": "tracker", "from_port": "mask", "to": "mask_out", "to_port": "image"},
+    {"from": "tracker", "from_port": "detection", "to": "detection_out", "to_port": "value"},
+    {"from": "tracker", "from_port": "detection", "to": "detection_prompt", "to_port": "detection"},
+    {"from": "tracker", "from_port": "detections", "to": "detection_prompt", "to_port": "detections"},
+    {"from": "detection_prompt", "from_port": "prompt", "to": "local_reason", "to_port": "question"},
+    {"from": "local_reason", "from_port": "text", "to": "reason_out", "to_port": "value"},
+    {"from": "local_reason", "from_port": "report", "to": "reason_report_out", "to_port": "value"},
+    {"from": "python_export", "from_port": "source", "to": "python_out", "to_port": "value"}
   ]
 }

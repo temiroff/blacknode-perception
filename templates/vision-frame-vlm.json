@@ -87,35 +87,42 @@
       "id": "vlm",
       "type": "VisionVLMDescribe",
       "params": {
+        "provider": "openai-compatible",
         "model": "gpt-4o-mini",
         "endpoint_url": "https://api.openai.com/v1",
         "api_key": "",
         "max_tokens": 512,
-        "temperature": 0.2
+        "temperature": 0.2,
+        "allow_text_only": false
       },
       "pos": [1120, 180],
-      "inputs": ["image", "question", "system", "model", "endpoint_url", "api_key", "max_tokens", "temperature"],
+      "inputs": ["image", "question", "system", "provider", "model", "endpoint_url", "api_key", "max_tokens", "temperature", "allow_text_only"],
       "outputs": ["text", "report", "raw"],
       "input_types": {
         "image": "Image",
         "question": "Text",
         "system": "Text",
+        "provider": "Text",
         "model": "Text",
         "endpoint_url": "Text",
         "api_key": "Text",
         "max_tokens": "Int",
-        "temperature": "Float"
+        "temperature": "Float",
+        "allow_text_only": "Bool"
       },
       "output_types": {"text": "Text", "report": "Text", "raw": "Dict"},
       "input_defaults": {
         "question": "What do you see?",
         "system": "You are a precise robot vision assistant. Describe only what is visible.",
+        "provider": "openai-compatible",
         "model": "gpt-4o-mini",
         "endpoint_url": "https://api.openai.com/v1",
         "api_key": "",
         "max_tokens": 512,
-        "temperature": 0.2
-      }
+        "temperature": 0.2,
+        "allow_text_only": false
+      },
+      "input_choices": {"provider": ["openai-compatible", "anthropic", "ollama", "auto"]}
     },
     "image_out": {
       "id": "image_out",
