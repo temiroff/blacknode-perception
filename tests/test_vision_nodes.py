@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import blacknode  # noqa: F401  triggers package discovery
+from blacknode.pkg.blacknode_vision import cv2_runtime
 from blacknode.node import _NODE_REGISTRY
 from blacknode.workflow import validate_workflow
 
@@ -133,6 +134,37 @@ def test_cv2_color_target_hint_falls_back_without_color():
     assert result["source"] == "fallback"
     assert result["color"] == "purple"
     assert result["label"] == "purple cube"
+
+
+def test_cv2_stream_runtime_pushes_live_config(monkeypatch):
+    calls = []
+
+    class Proc:
+        def poll(self):
+            return None
+
+    def fake_post_json(url, payload, timeout=1.0):
+        calls.append({"url": url, "payload": payload, "timeout": timeout})
+        return {"ok": True, "updated": sorted(payload), "version": 2}
+
+    monkeypatch.setitem(cv2_runtime._STREAMS, "cube_tracker", {
+        "proc": Proc(),
+        "config_url": "http://127.0.0.1:9911/config.json",
+        "source_url": "http://127.0.0.1:9900/snapshot.jpg",
+        "detection_url": "http://127.0.0.1:9911/detection.json",
+    })
+    monkeypatch.setattr(cv2_runtime, "_post_json", fake_post_json)
+
+    result = cv2_runtime.update_color_stream_config("cube_tracker", {"object_color": "#22c55e"})
+
+    assert result["ok"] is True
+    assert result["active"] is True
+    assert result["updated"] == ["object_color"]
+    assert calls == [{
+        "url": "http://127.0.0.1:9911/config.json",
+        "payload": {"object_color": "#22c55e"},
+        "timeout": 1.0,
+    }]
 
 
 def test_stream_status_ready_dashboard():
@@ -354,13 +386,12 @@ def test_cv2_color_object_stream_starts_runtime(monkeypatch):
     result = fn({
         "stream_id": "cube_tracker",
         "source_url": "http://127.0.0.1:9000/snapshot.jpg",
+        "object_color": "#ef4444",
+        "use_reasoning_color": False,
         "target": "track the red cube",
         "reasoning_state_url": "http://127.0.0.1:9200/state.json",
-        "fallback_color": "green",
         "target_update_seconds": 2.0,
         "label": "cube",
-        "lower_hsv": "35,60,60",
-        "upper_hsv": "85,255,255",
     })
     assert result["streaming"] is True
     assert result["preview"] == "http://127.0.0.1:9100/stream.mjpg"
@@ -369,9 +400,10 @@ def test_cv2_color_object_stream_starts_runtime(monkeypatch):
     assert result["detection"]["center"]["x"] == 40
     assert calls[0]["source_url"] == "http://127.0.0.1:9000/snapshot.jpg"
     assert calls[0]["stream_id"] == "cube_tracker"
+    assert calls[0]["object_color"] == "#ef4444"
+    assert calls[0]["use_reasoning_color"] is False
     assert calls[0]["target_text"] == "track the red cube"
     assert calls[0]["reasoning_state_url"] == "http://127.0.0.1:9200/state.json"
-    assert calls[0]["fallback_color"] == "green"
     assert calls[0]["target_update_seconds"] == 2.0
 
 
@@ -457,7 +489,11 @@ def test_cube_template_uses_live_cv2_stream_and_qwen3():
     assert "green cube" not in workflow["node_meta"]["target_prompt"]["params"]["value"].lower()
     assert "target_hint" not in workflow["node_meta"]
     assert "python_export" not in workflow["node_meta"]
-    assert workflow["node_meta"]["cv2_stream"]["params"]["fallback_color"] == ""
+    assert workflow["node_meta"]["cv2_stream"]["params"]["object_color"] == "#22c55e"
+    assert workflow["node_meta"]["cv2_stream"]["params"]["use_reasoning_color"] is True
+    assert "tracking_mode" not in workflow["node_meta"]["cv2_stream"]["params"]
+    assert "fallback_color" not in workflow["node_meta"]["cv2_stream"]["params"]
+    assert "lower_hsv" not in workflow["node_meta"]["cv2_stream"]["params"]
     assert workflow["node_meta"]["live_reason"]["type"] == "VisionReasoningStream"
     assert workflow["node_meta"]["live_reason"]["params"]["model"] == "qwen3-vl:4b"
     assert workflow["node_meta"]["live_reason"]["params"]["max_tokens"] == 4096

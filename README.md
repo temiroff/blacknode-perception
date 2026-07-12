@@ -64,9 +64,9 @@ rotation:=0
 | `VisionFramePrompt` | Builds a concise robot-vision prompt for one camera frame |
 | `VisionDetectionPrompt` | Builds an LLM prompt from CV2 detections for local reasoning |
 | `VisionStreamStatus` | Renders live camera stream readiness as a dashboard image |
-| `VisionVLMDescribe` | Sends one image frame or text-only detection prompt to OpenAI-compatible, Anthropic, or local Ollama chat |
+| `VisionVLMDescribe` | Sends one image frame or text-only detection prompt to OpenAI-compatible, NVIDIA NIM, Anthropic, or local Ollama chat |
 | `VisionReasoningDashboard` | Shows the captured frame with the VLM's visible observations, evidence, uncertainty, and next action |
-| `VisionReasoningStream` | Starts a live MJPEG dashboard that periodically describes a camera image with local Ollama |
+| `VisionReasoningStream` | Starts a live MJPEG dashboard that periodically describes a camera image with local Ollama or NVIDIA NIM |
 | `CV2HSVMask` | Creates an HSV color mask from a Blacknode image |
 | `CV2ColorTargetHint` | Converts target/reasoning text like `track red cube` into label and HSV settings for CV2 tracking |
 | `CV2ColorObjectTracker` | Tracks colored objects such as cubes and returns overlay, mask, center, area, and detections |
@@ -110,13 +110,14 @@ For a different camera index, edit `ROS2Run.arguments`, for example
 
 ## VLM and LLM endpoints
 
-`VisionVLMDescribe` supports three providers:
+`VisionVLMDescribe` and `VisionReasoningStream` both support these providers:
 
-| Provider | Endpoint | Key |
-|---|---|---|
-| `openai-compatible` | `/chat/completions` | `VISION_API_KEY`, `OPENAI_API_KEY`, or `NVIDIA_API_KEY` |
-| `anthropic` | `/messages` | `ANTHROPIC_API_KEY` or `VISION_API_KEY` |
-| `ollama` | `/api/chat` | no key for local Ollama |
+| Provider | Endpoint | Key | Default model |
+|---|---|---|---|
+| `openai-compatible` | `/chat/completions` | `VISION_API_KEY`, `OPENAI_API_KEY`, or `NVIDIA_API_KEY` | `gpt-4o-mini` |
+| `nvidia` | `https://integrate.api.nvidia.com/v1/chat/completions` | `NVIDIA_API_KEY` | `nvidia/nemotron-nano-12b-v2-vl` |
+| `anthropic` | `/messages` | `ANTHROPIC_API_KEY` or `VISION_API_KEY` | `claude-sonnet-4-5` |
+| `ollama` | `/api/chat` | no key for local Ollama | `qwen3-vl:4b` |
 
 For hosted endpoints, set the key before starting Blacknode:
 
@@ -134,6 +135,17 @@ model: qwen3-vl:4b
 max_tokens: 4096
 ```
 
+`provider: nvidia` calls NVIDIA's hosted NIM catalog with the same
+OpenAI-compatible wire format, using `NVIDIA_API_KEY`. `nvidia/cosmos-reason1-7b`
+and `nvidia/cosmos-reason2-8b` are NVIDIA's own open models built specifically
+for physical-AI/robot reasoning, but as of this writing NIM hosts them as gated
+"functions" that 404 for accounts without separate access approval; the
+`nvidia/nemotron-nano-12b-v2-vl` default works out of the box with just an API
+key. Switching `provider` on the node's editor panel automatically swaps
+`model`/`endpoint_url` to that provider's own default unless you've explicitly
+set them yourself. The editor also renders `model` as a dropdown of your
+installed models (via `GET /ollama/models`) whenever `provider: ollama`.
+
 Qwen3 models can spend many tokens in Ollama's hidden thinking phase before
 returning final `content`, so `VisionVLMDescribe` automatically raises
 `num_predict` to at least `4096` for Qwen3 models.
@@ -149,19 +161,17 @@ and tracker streams run. The CV2 local-reasoning template defaults to
 `interval_seconds: 3.0` and dashboard `max_fps: 4.0`; actual reasoning updates
 are still limited by how fast the local VLM returns an answer.
 
-Changing `interval_seconds`, model, or FPS on an already-running reasoning
-stream requires cooking the node again. The current process is started with the
-node settings it had at launch; stop and run the workflow again to apply new
-stream settings.
+Changing `interval_seconds`, `model`, `provider`, `prompt`, or similar params
+on an already-running reasoning stream takes effect the next time you cook the
+node (e.g. via the editor's per-node Run or the Live toggle) — the running
+process is patched in place over HTTP rather than restarted, so the dashboard
+doesn't drop or reconnect. `image_url`/`detection_url`/`host`/`port` follow the
+same live-patch path; only stopping and starting the stream changes those.
 
 ## CV2 tracking
 
-The cube tracker uses HSV thresholds. The default range is tuned for green:
-
-```text
-lower_hsv: 35,60,60
-upper_hsv: 85,255,255
-```
+The live cube tracker exposes one color picker, `object_color`. Internally it
+derives the HSV threshold range needed by OpenCV from that selected color.
 
 In the live reasoning template, the target prompt goes to the VLM first, not
 directly to CV2:
@@ -172,12 +182,22 @@ Text target prompt
   -> CV2ColorObjectStream.reasoning_state_url
 ```
 
-The model answer chooses the target color, then the CV2 stream updates its HSV
-range while it is running. The template leaves `CV2ColorObjectStream.target`
-and `fallback_color` empty so the tracker does not silently lock onto a
-hard-coded color before the VLM answers. For non-VLM workflows,
-`CV2ColorTargetHint.target` or `CV2ColorObjectStream.target` can still accept
-direct text such as `track red cube`.
+When `use_reasoning_color` is enabled, the model answer can choose the target
+color and the CV2 stream updates its internal HSV range while it is running. If
+reasoning does not return a color yet, the stream uses `object_color`. When
+`use_reasoning_color` is disabled, `object_color` is the manual tracking color.
+Reasoning answers are asked to include a `Target: <color> <object>` line
+precisely so color extraction can prefer whatever's named there — a `Scene:`
+line describing the surroundings often mentions other colors in frame (e.g.
+"green and red cubes" when only the green one is the target), so the color
+picker specifically looks after `Target:` first before falling back to
+scanning the whole answer.
+Most `CV2ColorObjectStream` properties are hot updated from the editor:
+changing `object_color`, `use_reasoning_color`, `target`, `min_area`, `blur`,
+`morphology_iters`, FPS, width, or JPEG quality updates the running overlay,
+mask, and detection JSON without restarting the MJPEG URLs. For non-VLM
+workflows, `CV2ColorTargetHint.target` or `CV2ColorObjectStream.target` can
+still accept direct text such as `track red cube`.
 
 The CV2 tracker is still a fast color-threshold tracker, so it does not detect
 every cube automatically by shape. The VLM/reasoning side chooses what color to

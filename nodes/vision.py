@@ -25,6 +25,27 @@ from blacknode.node import Bool, Dict, Enum, Float, Image, Int, List, Text, node
 _CATEGORY = "Vision"
 _OPENAI_COMPATIBLE_DEFAULT_ENDPOINT = "https://api.openai.com/v1"
 _OPENAI_COMPATIBLE_DEFAULT_MODEL = "gpt-4o-mini"
+# Nemotron Nano VL is NVIDIA's own open-weight vision-language model -- the
+# default for provider=nvidia, distinct from the generic OpenAI-compatible
+# fallback. (Cosmos Reason1/Reason2 are also NVIDIA open models built
+# specifically for physical AI/robot reasoning, but as of this writing NIM
+# hosts them as gated "functions" that 404 for accounts without separate
+# access approval; Nemotron Nano VL works out of the box with just an
+# NVIDIA_API_KEY.)
+_NVIDIA_NIM_DEFAULT_ENDPOINT = "https://integrate.api.nvidia.com/v1"
+_NVIDIA_NIM_DEFAULT_MODEL = "nvidia/nemotron-nano-12b-v2-vl"
+_PROVIDER_DEFAULT_ENDPOINTS = {
+    "ollama": "http://127.0.0.1:11434",
+    "anthropic": "https://api.anthropic.com/v1",
+    "nvidia": _NVIDIA_NIM_DEFAULT_ENDPOINT,
+    "openai-compatible": _OPENAI_COMPATIBLE_DEFAULT_ENDPOINT,
+}
+_PROVIDER_DEFAULT_MODELS = {
+    "ollama": "qwen3-vl:4b",
+    "anthropic": "claude-sonnet-4-5",
+    "nvidia": _NVIDIA_NIM_DEFAULT_MODEL,
+    "openai-compatible": _OPENAI_COMPATIBLE_DEFAULT_MODEL,
+}
 
 
 def _image_kind(value: str) -> str:
@@ -84,7 +105,9 @@ def _image_data_url(image: str) -> tuple[str, str]:
 
 def _normal_provider(value: Any, endpoint_url: str = "") -> str:
     raw = str(value or "openai-compatible").strip().lower().replace("_", "-")
-    if raw in {"openai", "openai-compatible", "nvidia", "nim", "openrouter"}:
+    if raw in {"nvidia", "nim"}:
+        return "nvidia"
+    if raw in {"openai", "openai-compatible", "openrouter"}:
         return "openai-compatible"
     if raw in {"anthropic", "claude"}:
         return "anthropic"
@@ -96,30 +119,24 @@ def _normal_provider(value: Any, endpoint_url: str = "") -> str:
             return "ollama"
         if "anthropic.com" in endpoint:
             return "anthropic"
+        if "integrate.api.nvidia.com" in endpoint:
+            return "nvidia"
         return "openai-compatible"
     return "openai-compatible"
 
 
 def _default_model(provider: str, model: str) -> str:
     raw = model.strip()
-    if raw and not (provider != "openai-compatible" and raw == _OPENAI_COMPATIBLE_DEFAULT_MODEL):
-        return model.strip()
-    if provider == "anthropic":
-        return "claude-sonnet-4-5"
-    if provider == "ollama":
-        return "qwen3-vl:4b"
-    return _OPENAI_COMPATIBLE_DEFAULT_MODEL
+    if raw and raw not in _PROVIDER_DEFAULT_MODELS.values():
+        return raw
+    return _PROVIDER_DEFAULT_MODELS.get(provider, _OPENAI_COMPATIBLE_DEFAULT_MODEL)
 
 
 def _default_endpoint(provider: str, endpoint_url: str) -> str:
     endpoint = endpoint_url.strip().rstrip("/")
-    if endpoint and not (provider != "openai-compatible" and endpoint == _OPENAI_COMPATIBLE_DEFAULT_ENDPOINT):
+    if endpoint and endpoint not in _PROVIDER_DEFAULT_ENDPOINTS.values():
         return endpoint
-    if provider == "anthropic":
-        return "https://api.anthropic.com/v1"
-    if provider == "ollama":
-        return "http://127.0.0.1:11434"
-    return _OPENAI_COMPATIBLE_DEFAULT_ENDPOINT
+    return _PROVIDER_DEFAULT_ENDPOINTS.get(provider, _OPENAI_COMPATIBLE_DEFAULT_ENDPOINT)
 
 
 def _read_url_bytes(url: str) -> tuple[bytes, str]:
@@ -336,7 +353,7 @@ def vision_stream_status(ctx: dict) -> dict:
         "image": Image(default=""),
         "question": Text(default="What do you see?"),
         "system": Text(default="You are a precise robot vision assistant. Describe only what is visible."),
-        "provider": Enum(["openai-compatible", "anthropic", "ollama", "auto"], default="openai-compatible"),
+        "provider": Enum(["openai-compatible", "nvidia", "anthropic", "ollama", "auto"], default="openai-compatible"),
         "model": Text(default="gpt-4o-mini"),
         "endpoint_url": Text(default="https://api.openai.com/v1"),
         "api_key": Text(default=""),
@@ -620,7 +637,7 @@ def vision_reasoning_dashboard(ctx: dict) -> dict:
 @node(
     name="VisionReasoningStream",
     category=_CATEGORY,
-    description="Start or stop a live MJPEG dashboard that periodically describes a camera image with local Ollama.",
+    description="Start or stop a live MJPEG dashboard that periodically describes a camera image (local Ollama or NVIDIA NIM).",
     inputs={
         "trigger": AnyPort,
         "action": Enum(["start", "stop"], default="start"),
@@ -629,7 +646,7 @@ def vision_reasoning_dashboard(ctx: dict) -> dict:
         "detection_url": Text(default=""),
         "prompt": Text(default="Describe what you see in this camera frame. If a colored cube is visible, mention its color and approximate location. Then give one useful next robot action."),
         "system": Text(default="You are a robot vision assistant. Describe only visible evidence from the image, then give a concise next action."),
-        "provider": Enum(["ollama"], default="ollama"),
+        "provider": Enum(["ollama", "nvidia"], default="ollama"),
         "model": Text(default="qwen3-vl:4b"),
         "endpoint_url": Text(default="http://127.0.0.1:11434"),
         "api_key": Text(default=""),
@@ -672,14 +689,19 @@ def vision_reasoning_stream(ctx: dict) -> dict:
         return {**empty, "report": "reasoning stream FAILED: connect image_url to a camera snapshot URL"}
 
     provider = _normal_provider(ctx.get("provider"), str(ctx.get("endpoint_url") or ""))
-    if provider != "ollama":
-        return {**empty, "report": "reasoning stream FAILED: only provider=ollama is supported for live local streaming"}
+    if provider not in {"ollama", "nvidia"}:
+        return {**empty, "report": "reasoning stream FAILED: only provider=ollama or provider=nvidia is supported for live streaming"}
 
     model = _default_model(provider, str(ctx.get("model") or ""))
     max_tokens = max(1, min(int(ctx.get("max_tokens") or 4096), 8192))
     if "qwen3" in model.lower() and max_tokens < 4096:
         max_tokens = 4096
     host = str(ctx.get("host") or "127.0.0.1").strip() or "127.0.0.1"
+    api_key = str(ctx.get("api_key") or "").strip()
+    if not api_key:
+        api_key = os.environ.get("NVIDIA_API_KEY", "").strip() if provider == "nvidia" else os.environ.get("OLLAMA_API_KEY", "").strip()
+    if provider == "nvidia" and not api_key:
+        return {**empty, "report": "reasoning stream FAILED: set api_key or NVIDIA_API_KEY for provider=nvidia"}
     result = cv2_runtime.start_reasoning_stream(
         stream_id=stream_id,
         image_url=image_url,
@@ -689,7 +711,7 @@ def vision_reasoning_stream(ctx: dict) -> dict:
         provider=provider,
         model=model,
         endpoint_url=_default_endpoint(provider, str(ctx.get("endpoint_url") or "")),
-        api_key=str(ctx.get("api_key") or "").strip() or os.environ.get("OLLAMA_API_KEY", "").strip(),
+        api_key=api_key,
         temperature=float(ctx.get("temperature") or 0.2),
         max_tokens=max_tokens,
         interval_seconds=max(1.0, float(ctx.get("interval_seconds") or 8.0)),
@@ -705,6 +727,7 @@ def vision_reasoning_stream(ctx: dict) -> dict:
     stream_url = str(result.get("stream_url") or "")
     snapshot_url = str(result.get("snapshot_url") or "")
     state_url = str(result.get("state_url") or "")
+    model_label = model if model.lower().startswith(f"{provider.lower()}/") else f"{provider}/{model}"
     return {
         "preview": stream_url,
         "streaming": True,
@@ -712,5 +735,5 @@ def vision_reasoning_stream(ctx: dict) -> dict:
         "snapshot_url": snapshot_url,
         "state_url": state_url,
         "stream_id": stream_id,
-        "report": f"LIVE REASONING STREAM running on {stream_url} from {image_url} with ollama/{model}",
+        "report": f"LIVE REASONING STREAM running on {stream_url} from {image_url} with {model_label}",
     }

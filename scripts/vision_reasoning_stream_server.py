@@ -9,6 +9,7 @@ import signal
 import textwrap
 import threading
 import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -16,9 +17,23 @@ from typing import Any
 import cv2
 import numpy as np
 
+CONFIG_FIELDS = {
+    "image_url",
+    "detection_url",
+    "prompt",
+    "system",
+    "provider",
+    "model",
+    "endpoint_url",
+    "api_key",
+    "temperature",
+    "max_tokens",
+    "interval_seconds",
+}
+
 
 class SharedState:
-    def __init__(self) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.lock = threading.Lock()
         self.dashboard_jpeg: bytes = b""
         self.state: dict[str, Any] = {
@@ -27,6 +42,8 @@ class SharedState:
             "report": "waiting for first reasoning update",
             "updated_at": 0.0,
         }
+        self.config = dict(config)
+        self.config_version = 0
         self.stop = threading.Event()
 
     def dashboard_snapshot(self) -> bytes:
@@ -36,6 +53,26 @@ class SharedState:
     def state_snapshot(self) -> dict[str, Any]:
         with self.lock:
             return dict(self.state)
+
+    def config_snapshot(self) -> tuple[dict[str, Any], int]:
+        with self.lock:
+            return dict(self.config), self.config_version
+
+    def update_config(self, patch: dict[str, Any]) -> dict[str, Any]:
+        clean = {key: value for key, value in patch.items() if key in CONFIG_FIELDS}
+        if not clean:
+            config, version = self.config_snapshot()
+            return {"ok": True, "updated": [], "ignored": sorted(patch), "version": version, "config": config}
+        with self.lock:
+            self.config.update(clean)
+            self.config_version += 1
+            config = dict(self.config)
+            version = self.config_version
+        return {"ok": True, "updated": sorted(clean), "ignored": sorted(set(patch) - set(clean)), "version": version, "config": config}
+
+
+def initial_config(args: argparse.Namespace) -> dict[str, Any]:
+    return {field: getattr(args, field) for field in CONFIG_FIELDS}
 
 
 def fetch_bytes(url: str, timeout: float) -> tuple[bytes, str]:
@@ -142,6 +179,57 @@ def call_ollama(args: argparse.Namespace, image_raw: bytes, media_type: str, det
     return text, f"ollama/{model} OK{retry_note}; media={media_type}", payload
 
 
+def extract_openai_text(payload: dict[str, Any]) -> str:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return ""
+    message = choices[0].get("message") if isinstance(choices[0], dict) else {}
+    content = message.get("content") if isinstance(message, dict) else ""
+    if isinstance(content, list):
+        return "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict)).strip()
+    return str(content or "").strip()
+
+
+def call_openai_compatible(args: argparse.Namespace, image_raw: bytes, media_type: str, detection: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    """Call an OpenAI-compatible chat-completions endpoint (NVIDIA NIM, OpenAI, OpenRouter, ...)."""
+    model = args.model.strip()
+    label = model if model.lower().startswith(f"{args.provider.lower()}/") else f"{args.provider}/{model}"
+    image_data_url = f"data:{media_type};base64,{base64.b64encode(image_raw).decode('ascii')}"
+    messages: list[dict[str, Any]] = []
+    if args.system.strip():
+        messages.append({"role": "system", "content": args.system.strip()})
+    messages.append({
+        "role": "user",
+        "content": [
+            {"type": "text", "text": build_prompt(args, detection)},
+            {"type": "image_url", "image_url": {"url": image_data_url}},
+        ],
+    })
+    body = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max(1, min(int(args.max_tokens), 8192)),
+        "temperature": float(args.temperature),
+    }
+    headers = {"Content-Type": "application/json"}
+    if args.api_key.strip():
+        headers["Authorization"] = f"Bearer {args.api_key.strip()}"
+    endpoint = args.endpoint_url.strip().rstrip("/")
+    try:
+        payload = post_json(endpoint + "/chat/completions", body, headers, timeout=float(args.request_timeout))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        return "", f"{label} FAILED: HTTP {exc.code}: {detail}", {}
+    except Exception as exc:  # noqa: BLE001
+        return "", f"{label} FAILED: {type(exc).__name__}: {exc}", {}
+    text = extract_openai_text(payload)
+    if not text:
+        error = payload.get("error")
+        detail = f": {error}" if error else ""
+        return "", f"{label} FAILED: empty response{detail}", payload
+    return text, f"{label} OK; media={media_type}", payload
+
+
 def wrap_lines(text: str, width: int, max_lines: int) -> list[str]:
     lines: list[str] = []
     for raw in str(text or "").splitlines() or [""]:
@@ -221,27 +309,30 @@ def update_dashboard(state: SharedState, frame: Any | None, answer: str, report:
 
 
 def reasoning_loop(args: argparse.Namespace, state: SharedState) -> None:
-    interval = max(1.0, float(args.interval_seconds))
     answer = ""
     detection: dict[str, Any] = {}
     frame = None
     while not state.stop.is_set():
         started = time.monotonic()
         raw_payload: dict[str, Any] = {}
+        config, _version = state.config_snapshot()
+        cfg = argparse.Namespace(**{**vars(args), **config})
         try:
-            frame, image_raw, media_type = fetch_frame(args.image_url, float(args.source_timeout))
+            frame, image_raw, media_type = fetch_frame(cfg.image_url, float(args.source_timeout))
             if int(args.max_width) > 0 and frame.shape[1] > int(args.max_width):
                 scale = int(args.max_width) / float(frame.shape[1])
                 frame = cv2.resize(frame, (int(args.max_width), max(1, int(frame.shape[0] * scale))), interpolation=cv2.INTER_AREA)
-            detection = fetch_json(args.detection_url, float(args.source_timeout)) if args.detection_url else {}
+            detection = fetch_json(cfg.detection_url, float(args.source_timeout)) if cfg.detection_url else {}
             update_dashboard(state, frame, answer, "VLM update in progress...", detection, args.title)
-            if args.provider != "ollama":
-                raise RuntimeError("VisionReasoningStream currently supports provider=ollama")
-            answer, report, raw_payload = call_ollama(args, image_raw, media_type, detection)
+            if cfg.provider == "ollama":
+                answer, report, raw_payload = call_ollama(cfg, image_raw, media_type, detection)
+            else:
+                answer, report, raw_payload = call_openai_compatible(cfg, image_raw, media_type, detection)
             update_dashboard(state, frame, answer, report, detection, args.title, raw_payload)
         except Exception as exc:  # noqa: BLE001
             update_dashboard(state, frame, answer, f"reasoning stream FAILED: {type(exc).__name__}: {exc}", detection, args.title, raw_payload)
         elapsed = time.monotonic() - started
+        interval = max(1.0, float(cfg.interval_seconds))
         state.stop.wait(max(0.05, interval - elapsed))
 
 
@@ -255,6 +346,10 @@ def make_handler(state: SharedState, *, max_fps: float):
         def do_GET(self) -> None:  # noqa: N802
             if self.path.startswith("/state.json"):
                 self._send_json(state.state_snapshot())
+                return
+            if self.path.startswith("/config.json"):
+                config, version = state.config_snapshot()
+                self._send_json({"ok": True, "version": version, "config": config})
                 return
             if self.path.startswith("/dashboard.jpg"):
                 jpeg = state.dashboard_snapshot()
@@ -290,6 +385,27 @@ def make_handler(state: SharedState, *, max_fps: float):
                     time.sleep(1.0 / max(0.1, float(max_fps)))
                 return
             self.send_error(404, "not found")
+
+        def do_PATCH(self) -> None:  # noqa: N802
+            self._handle_config_update()
+
+        def do_POST(self) -> None:  # noqa: N802
+            self._handle_config_update()
+
+        def _handle_config_update(self) -> None:
+            if not self.path.startswith("/config.json"):
+                self.send_error(404, "not found")
+                return
+            try:
+                length = int(self.headers.get("Content-Length") or "0")
+                body = self.rfile.read(length) if length > 0 else b"{}"
+                payload = json.loads(body.decode("utf-8") or "{}")
+                if not isinstance(payload, dict):
+                    raise ValueError("config update must be a JSON object")
+            except Exception as exc:  # noqa: BLE001
+                self.send_error(400, f"invalid config update: {type(exc).__name__}: {exc}")
+                return
+            self._send_json(state.update_config(payload))
 
         def _send_json(self, payload: dict[str, Any]) -> None:
             body = json.dumps(payload).encode("utf-8")
@@ -328,7 +444,7 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    shared = SharedState()
+    shared = SharedState(initial_config(args))
     signal.signal(signal.SIGTERM, lambda _sig, _frame: shared.stop.set())
     update_dashboard(shared, None, "", "starting live reasoning stream", {}, args.title)
     thread = threading.Thread(target=reasoning_loop, args=(args, shared), daemon=True)

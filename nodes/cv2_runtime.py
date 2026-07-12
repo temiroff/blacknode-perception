@@ -44,6 +44,28 @@ def _read_json(url: str, timeout: float = 1.0) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
+def _post_json(url: str, payload: dict[str, Any], timeout: float = 1.0) -> dict[str, Any]:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json", "User-Agent": "BlacknodeCV2Runtime/0.1"},
+        method="PATCH",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _bool_value(value: Any, default: bool = False) -> bool:
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _terminate_process(proc: subprocess.Popen) -> bool:
     if proc.poll() is not None:
         return False
@@ -67,12 +89,11 @@ def start_color_stream(
     *,
     stream_id: str,
     source_url: str,
+    object_color: str,
+    use_reasoning_color: bool,
     label: str,
-    lower_hsv: str,
-    upper_hsv: str,
     target_text: str,
     reasoning_state_url: str,
-    fallback_color: str,
     target_update_seconds: float,
     min_area: int,
     max_detections: int,
@@ -84,6 +105,41 @@ def start_color_stream(
     max_width: int,
     jpeg_quality: int,
 ) -> dict[str, Any]:
+    existing = _STREAMS.get(stream_id)
+    if existing and existing.get("proc") is not None and existing["proc"].poll() is None:
+        update_result = update_color_stream_config(stream_id, {
+            "source_url": source_url,
+            "object_color": object_color,
+            "use_reasoning_color": _bool_value(use_reasoning_color, True),
+            "label": label,
+            "target_text": target_text,
+            "reasoning_state_url": reasoning_state_url,
+            "target_update_seconds": target_update_seconds,
+            "min_area": min_area,
+            "max_detections": max_detections,
+            "blur": blur,
+            "morphology_iters": morphology_iters,
+            "max_fps": max_fps,
+            "max_width": max_width,
+            "jpeg_quality": jpeg_quality,
+        })
+        detection: dict[str, Any] = {}
+        try:
+            detection = _read_json(str(existing.get("detection_url") or ""), timeout=0.5)
+        except Exception:
+            pass
+        return {
+            "ok": bool(update_result.get("ok", True)),
+            "stream_id": stream_id,
+            "stream_url": existing.get("stream_url", ""),
+            "snapshot_url": existing.get("snapshot_url", ""),
+            "mask_stream_url": existing.get("mask_stream_url", ""),
+            "mask_url": existing.get("mask_url", ""),
+            "detection_url": existing.get("detection_url", ""),
+            "detection": detection,
+            "port": int(str(existing.get("stream_url", "")).rsplit(":", 1)[-1].split("/", 1)[0] or 0) if ":" in str(existing.get("stream_url", "")) else 0,
+            "updated": update_result.get("updated", []),
+        }
     stop_color_stream(stream_id)
     script = _script_path()
     if not script.exists():
@@ -94,18 +150,16 @@ def start_color_stream(
         str(script),
         "--source-url",
         source_url,
+        "--object-color",
+        object_color,
+        "--use-reasoning-color",
+        "true" if _bool_value(use_reasoning_color, True) else "false",
         "--label",
         label,
-        "--lower-hsv",
-        lower_hsv,
-        "--upper-hsv",
-        upper_hsv,
         "--target-text",
         target_text,
         "--reasoning-state-url",
         reasoning_state_url,
-        "--fallback-color",
-        fallback_color,
         "--target-update-seconds",
         str(target_update_seconds),
         "--min-area",
@@ -159,11 +213,14 @@ def start_color_stream(
     _STREAMS[stream_id] = {
         "proc": proc,
         "source_url": source_url,
+        "config_url": f"{base_url}/config.json",
         "stream_url": f"{base_url}/stream.mjpg",
         "snapshot_url": f"{base_url}/snapshot.jpg",
         "mask_stream_url": f"{base_url}/mask.mjpg",
         "mask_url": f"{base_url}/mask.png",
         "detection_url": detection_url,
+        "object_color": object_color,
+        "use_reasoning_color": _bool_value(use_reasoning_color, True),
         "label": label,
         "target_text": target_text,
         "reasoning_state_url": reasoning_state_url,
@@ -201,6 +258,36 @@ def start_reasoning_stream(
     max_width: int,
     title: str,
 ) -> dict[str, Any]:
+    existing = _REASONING_STREAMS.get(stream_id)
+    if existing and existing.get("proc") is not None and existing["proc"].poll() is None:
+        update_result = update_reasoning_stream_config(stream_id, {
+            "image_url": image_url,
+            "detection_url": detection_url,
+            "prompt": prompt,
+            "system": system,
+            "provider": provider,
+            "model": model,
+            "endpoint_url": endpoint_url,
+            "api_key": api_key,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "interval_seconds": interval_seconds,
+        })
+        state: dict[str, Any] = {}
+        try:
+            state = _read_json(str(existing.get("state_url") or ""), timeout=0.5)
+        except Exception:
+            pass
+        return {
+            "ok": bool(update_result.get("ok", True)),
+            "stream_id": stream_id,
+            "stream_url": existing.get("stream_url", ""),
+            "snapshot_url": existing.get("snapshot_url", ""),
+            "state_url": existing.get("state_url", ""),
+            "state": state,
+            "updated": update_result.get("updated", []),
+        }
+
     stop_reasoning_stream(stream_id)
     script = _reasoning_script_path()
     if not script.exists():
@@ -278,6 +365,7 @@ def start_reasoning_stream(
         "stream_url": f"{base_url}/dashboard.mjpg",
         "snapshot_url": f"{base_url}/dashboard.jpg",
         "state_url": state_url,
+        "config_url": f"{base_url}/config.json",
         "model": model,
     }
     return {
@@ -301,6 +389,30 @@ def stop_color_stream(stream_id: str = "") -> dict[str, Any]:
         if _terminate_process(item["proc"]):
             stopped += 1
     return {"ok": True, "stopped": stopped}
+
+
+def update_reasoning_stream_config(stream_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+    item = _REASONING_STREAMS.get(stream_id)
+    if not item:
+        return {"ok": True, "active": False, "updated": [], "report": f"reasoning stream '{stream_id}' is not running"}
+    proc = item.get("proc")
+    if proc is None or proc.poll() is not None:
+        _REASONING_STREAMS.pop(stream_id, None)
+        return {"ok": True, "active": False, "updated": [], "report": f"reasoning stream '{stream_id}' has stopped"}
+    config_url = str(item.get("config_url") or "")
+    if not config_url:
+        return {"ok": False, "active": True, "error": f"reasoning stream '{stream_id}' has no config endpoint"}
+    try:
+        result = _post_json(config_url, updates, timeout=1.0)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "active": True, "error": f"{type(exc).__name__}: {exc}"}
+    if "image_url" in updates:
+        item["image_url"] = str(updates.get("image_url") or "")
+    if "detection_url" in updates:
+        item["detection_url"] = str(updates.get("detection_url") or "")
+    if "model" in updates:
+        item["model"] = str(updates.get("model") or "")
+    return {"ok": True, "active": True, **result}
 
 
 def stop_reasoning_stream(stream_id: str = "") -> dict[str, Any]:
@@ -331,6 +443,8 @@ def runtime_status() -> dict[str, Any]:
             "mask_url": item.get("mask_url", ""),
             "detection_url": item.get("detection_url", ""),
             "label": item.get("label", ""),
+            "object_color": item.get("object_color", ""),
+            "use_reasoning_color": _bool_value(item.get("use_reasoning_color"), True),
         })
     reasoning_streams: list[dict[str, Any]] = []
     for stream_id, item in list(_REASONING_STREAMS.items()):
@@ -353,6 +467,34 @@ def runtime_status() -> dict[str, Any]:
         "cv2_streams": streams,
         "reasoning_streams": reasoning_streams,
     }
+
+
+def update_color_stream_config(stream_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+    item = _STREAMS.get(stream_id)
+    if not item:
+        return {"ok": True, "active": False, "updated": [], "report": f"CV2 stream '{stream_id}' is not running"}
+    proc = item.get("proc")
+    if proc is None or proc.poll() is not None:
+        _STREAMS.pop(stream_id, None)
+        return {"ok": True, "active": False, "updated": [], "report": f"CV2 stream '{stream_id}' has stopped"}
+    config_url = str(item.get("config_url") or "")
+    if not config_url:
+        return {"ok": False, "active": True, "error": f"CV2 stream '{stream_id}' has no config endpoint"}
+    try:
+        result = _post_json(config_url, updates, timeout=1.0)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "active": True, "error": f"{type(exc).__name__}: {exc}"}
+    if "target_text" in updates:
+        item["target_text"] = str(updates.get("target_text") or "")
+    if "reasoning_state_url" in updates:
+        item["reasoning_state_url"] = str(updates.get("reasoning_state_url") or "")
+    if "source_url" in updates:
+        item["source_url"] = str(updates.get("source_url") or "")
+    if "object_color" in updates:
+        item["object_color"] = str(updates.get("object_color") or "")
+    if "use_reasoning_color" in updates:
+        item["use_reasoning_color"] = _bool_value(updates.get("use_reasoning_color"), True)
+    return {"ok": True, "active": True, **result}
 
 
 def stop_runtime_services() -> dict[str, Any]:

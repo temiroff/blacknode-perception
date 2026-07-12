@@ -22,7 +22,7 @@ except Exception as exc:  # pragma: no cover - exercised on machines without Ope
     _CV2_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
 from blacknode.node import Any as AnyPort
-from blacknode.node import Bool, Dict, Enum, Float, Image, Int, List, Text, node
+from blacknode.node import Bool, Color, Dict, Enum, Float, Image, Int, List, Text, node
 
 _CATEGORY = "CV2"
 _HSV_COLOR_RANGES: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
@@ -169,6 +169,16 @@ def _read_reasoning_state_answer(state_url: str, wait_seconds: float) -> tuple[s
             break
         time.sleep(0.35)
     return "", last_error
+
+
+def _bool_value(value: Any, default: bool = False) -> bool:
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 @node(
@@ -564,13 +574,12 @@ def cv2_color_object_tracker(ctx: dict) -> dict:
         "action": Enum(["start", "stop"], default="start"),
         "stream_id": Text(default="cube_tracker"),
         "source_url": Text(default=""),
+        "object_color": Color(default="#22c55e"),
+        "use_reasoning_color": Bool(default=True),
         "target": Text(default=""),
         "reasoning_state_url": Text(default=""),
-        "fallback_color": Enum(sorted(_HSV_COLOR_RANGES), default="green"),
         "target_update_seconds": Float(default=2.0),
         "label": Text(default="cube"),
-        "lower_hsv": Text(default="35,60,60"),
-        "upper_hsv": Text(default="85,255,255"),
         "min_area": Int(default=300),
         "max_detections": Int(default=3),
         "blur": Int(default=5),
@@ -628,18 +637,19 @@ def cv2_color_object_stream(ctx: dict) -> dict:
         return {**empty, "report": "CV2 stream FAILED: connect source_url to a camera snapshot URL"}
 
     label = str(ctx.get("label") or "object").strip() or "object"
-    lower_hsv = ",".join(str(value) for value in _parse_hsv(ctx.get("lower_hsv"), (35, 60, 60)))
-    upper_hsv = ",".join(str(value) for value in _parse_hsv(ctx.get("upper_hsv"), (85, 255, 255)))
+    object_color = (
+        str(ctx.get("object_color") or ctx.get("manual_color") or ctx.get("fallback_color") or "#22c55e").strip()
+        or "#22c55e"
+    )
     host = str(ctx.get("host") or "127.0.0.1").strip() or "127.0.0.1"
     result = cv2_runtime.start_color_stream(
         stream_id=stream_id,
         source_url=source_url,
+        object_color=object_color,
+        use_reasoning_color=_bool_value(ctx.get("use_reasoning_color"), True),
         label=label,
-        lower_hsv=lower_hsv,
-        upper_hsv=upper_hsv,
         target_text=str(ctx.get("target") or "").strip(),
         reasoning_state_url=str(ctx.get("reasoning_state_url") or "").strip(),
-        fallback_color=str(ctx.get("fallback_color") or "").strip(),
         target_update_seconds=max(0.25, float(ctx.get("target_update_seconds") or 2.0)),
         min_area=max(0, int(ctx.get("min_area") or 0)),
         max_detections=max(1, int(ctx.get("max_detections") or 1)),

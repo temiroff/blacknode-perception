@@ -1,15 +1,15 @@
 {
   "kind": "blacknode.workflow",
   "schema_version": 1,
-  "name": "Blacknode Vision CV2 Cube Local Reasoning",
-  "saved_at": "2026-07-10T00:00:00",
+  "name": "Blacknode Vision CV2 Cube Pan-Follow with GPU Filter",
+  "saved_at": "2026-07-12T00:00:00",
   "entrypoint": {
     "node_id": "overlay_out",
     "port": "image"
   },
   "metadata": {
     "template": true,
-    "description": "Start the bundled USB camera, stream raw camera, resolve a prompt/model target into HSV, stream live CV2 overlay/mask, and run live image-first Ollama/Qwen reasoning.",
+    "description": "Start the bundled USB camera, stream raw camera, resolve a prompt/model target into HSV, stream live CV2 overlay/mask, run live image-first Ollama/Qwen reasoning (switchable to NVIDIA NIM), relay the CLEAN camera feed (not the tracking overlay) through a CUDA GPU image filter, and pan a real robot's shoulder_pan joint to follow the tracked cube.",
     "color": "#2563eb",
     "required_packages": [
       {
@@ -22,7 +22,36 @@
           "VisionReasoningStream"
         ]
       },
-      "blacknode-ros2"
+      {
+        "name": "blacknode-ros2",
+        "git_url": "https://github.com/temiroff/blacknode-ros2.git",
+        "node_types": [
+          "ROS2SystemCheck",
+          "ROS2Run",
+          "ROS2ImageStream",
+          "ROS2NativeJointState",
+          "ROS2NativeFollowDetectionJoint",
+          "ROS2MotionDashboard"
+        ]
+      },
+      {
+        "name": "blacknode-robot",
+        "git_url": "https://github.com/temiroff/blacknode-robot.git",
+        "node_types": [
+          "RobotDiscovery",
+          "RobotDriverPreset",
+          "RobotDriverDescriptor",
+          "RobotDriverLauncher",
+          "RobotUSBDiscovery"
+        ]
+      },
+      {
+        "name": "blacknode-cuda",
+        "git_url": "https://github.com/temiroff/blacknode-cuda.git",
+        "node_types": [
+          "CUDAImageFilterStream"
+        ]
+      }
     ]
   },
   "node_meta": {
@@ -33,8 +62,8 @@
         "refresh": true
       },
       "pos": [
-        40,
-        170
+        80.0,
+        1451.0
       ],
       "inputs": [
         "refresh"
@@ -69,8 +98,8 @@
         "wait_seconds": 10.0
       },
       "pos": [
-        390,
-        120
+        390.0,
+        1598.0
       ],
       "inputs": [
         "trigger",
@@ -133,8 +162,8 @@
         "jpeg_quality": 80
       },
       "pos": [
-        740,
-        60
+        1000.0,
+        1043.5
       ],
       "inputs": [
         "trigger",
@@ -206,8 +235,8 @@
         "value": "Track the most visible colored cube or object. If I specify a color in this prompt, use that exact color. If no color is specified, inspect the image and choose the target color. Always mention the chosen target color."
       },
       "pos": [
-        740,
-        430
+        9.061031640681222,
+        1636.0445374085723
       ],
       "inputs": [],
       "outputs": [
@@ -225,14 +254,14 @@
       "params": {
         "action": "start",
         "stream_id": "cube_tracker",
+        "source_url": "",
+        "object_color": "#22c55e",
+        "use_reasoning_color": true,
         "target": "",
         "reasoning_state_url": "",
-        "fallback_color": "",
         "target_update_seconds": 2.0,
         "label": "cube",
-        "lower_hsv": "35,60,60",
-        "upper_hsv": "85,255,255",
-        "min_area": 300,
+        "min_area": 200,
         "max_detections": 3,
         "blur": 5,
         "morphology_iters": 1,
@@ -243,21 +272,20 @@
         "jpeg_quality": 82
       },
       "pos": [
-        1120,
-        250
+        2700.0,
+        733.5
       ],
       "inputs": [
         "trigger",
         "action",
         "stream_id",
         "source_url",
+        "object_color",
+        "use_reasoning_color",
         "target",
         "reasoning_state_url",
-        "fallback_color",
         "target_update_seconds",
         "label",
-        "lower_hsv",
-        "upper_hsv",
         "min_area",
         "max_detections",
         "blur",
@@ -289,13 +317,12 @@
         "action": "Text",
         "stream_id": "Text",
         "source_url": "Text",
+        "object_color": "Color",
+        "use_reasoning_color": "Bool",
         "target": "Text",
         "reasoning_state_url": "Text",
-        "fallback_color": "Text",
         "target_update_seconds": "Float",
         "label": "Text",
-        "lower_hsv": "Text",
-        "upper_hsv": "Text",
         "min_area": "Int",
         "max_detections": "Int",
         "blur": "Int",
@@ -326,13 +353,12 @@
         "action": "start",
         "stream_id": "cube_tracker",
         "source_url": "",
+        "object_color": "#22c55e",
+        "use_reasoning_color": true,
         "target": "",
         "reasoning_state_url": "",
-        "fallback_color": "",
         "target_update_seconds": 2.0,
         "label": "cube",
-        "lower_hsv": "35,60,60",
-        "upper_hsv": "85,255,255",
         "min_area": 300,
         "max_detections": 3,
         "blur": 5,
@@ -347,18 +373,6 @@
         "action": [
           "start",
           "stop"
-        ],
-        "fallback_color": [
-          "black",
-          "blue",
-          "cyan",
-          "green",
-          "orange",
-          "pink",
-          "purple",
-          "red",
-          "white",
-          "yellow"
         ]
       }
     },
@@ -367,8 +381,8 @@
       "type": "OutputImage",
       "params": {},
       "pos": [
-        1120,
-        40
+        1850.0,
+        1608.5
       ],
       "inputs": [
         "image"
@@ -389,8 +403,8 @@
       "type": "OutputImage",
       "params": {},
       "pos": [
-        1500,
-        250
+        3550.0,
+        1991.0
       ],
       "inputs": [
         "image"
@@ -413,8 +427,8 @@
         "label": "CV2 detection"
       },
       "pos": [
-        1500,
-        650
+        3550.0,
+        2663.0
       ],
       "inputs": [
         "value"
@@ -431,8 +445,8 @@
       "type": "OutputImage",
       "params": {},
       "pos": [
-        1500,
-        80
+        3550.0,
+        1319.0
       ],
       "inputs": [
         "image"
@@ -453,8 +467,8 @@
       "type": "OutputImage",
       "params": {},
       "pos": [
-        2240,
-        430
+        2700.0,
+        1599.5
       ],
       "inputs": [
         "image"
@@ -492,8 +506,8 @@
         "title": "Blacknode Live Vision Reasoning"
       },
       "pos": [
-        1870,
-        430
+        1850.0,
+        913.5
       ],
       "inputs": [
         "trigger",
@@ -584,6 +598,548 @@
           "ollama"
         ]
       }
+    },
+    "follow_cube": {
+      "id": "follow_cube",
+      "type": "ROS2NativeFollowDetectionJoint",
+      "params": {
+        "state_topic": "/joint_states",
+        "command_topic": "/joint_commands",
+        "config_topic": "/joint_config",
+        "joint": "shoulder_pan",
+        "units": "degrees",
+        "frame_width": 960,
+        "target_x": 0.5,
+        "deadband": 0.08,
+        "gain": 35.0,
+        "max_step": 8.0,
+        "invert": true,
+        "ramp_seconds": 0.35,
+        "hold_seconds": 0.2,
+        "rate_hz": 30.0,
+        "armed": true,
+        "timeout": 10.0,
+        "robot": {},
+        "detection_url": ""
+      },
+      "pos": [
+        3452.6286371602328,
+        229.10194691395324
+      ],
+      "inputs": [
+        "trigger",
+        "detection",
+        "detection_url",
+        "robot",
+        "state_topic",
+        "command_topic",
+        "config_topic",
+        "joint",
+        "units",
+        "frame_width",
+        "target_x",
+        "deadband",
+        "gain",
+        "max_step",
+        "invert",
+        "ramp_seconds",
+        "hold_seconds",
+        "rate_hz",
+        "armed",
+        "timeout"
+      ],
+      "outputs": [
+        "moved",
+        "joint",
+        "before",
+        "after",
+        "target",
+        "error",
+        "command",
+        "report"
+      ],
+      "input_types": {
+        "trigger": "Any",
+        "detection": "Dict",
+        "state_topic": "Text",
+        "command_topic": "Text",
+        "config_topic": "Text",
+        "joint": "Text",
+        "units": "Text",
+        "frame_width": "Int",
+        "target_x": "Float",
+        "deadband": "Float",
+        "gain": "Float",
+        "max_step": "Float",
+        "invert": "Bool",
+        "ramp_seconds": "Float",
+        "hold_seconds": "Float",
+        "rate_hz": "Float",
+        "armed": "Bool",
+        "timeout": "Float",
+        "robot": "Dict",
+        "detection_url": "Text"
+      },
+      "output_types": {
+        "moved": "Bool",
+        "joint": "Text",
+        "before": "Dict",
+        "after": "Dict",
+        "target": "Dict",
+        "error": "Float",
+        "command": "Float",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "state_topic": "/joint_states",
+        "command_topic": "/joint_commands",
+        "config_topic": "/joint_config",
+        "joint": "",
+        "units": "degrees",
+        "frame_width": 640,
+        "target_x": 0.5,
+        "deadband": 0.08,
+        "gain": 35.0,
+        "max_step": 8.0,
+        "invert": false,
+        "ramp_seconds": 0.35,
+        "hold_seconds": 0.2,
+        "rate_hz": 30.0,
+        "armed": false,
+        "timeout": 10.0,
+        "robot": {},
+        "detection_url": ""
+      },
+      "input_choices": {
+        "units": [
+          "radians",
+          "degrees"
+        ]
+      }
+    },
+    "robot_motion_dashboard": {
+      "id": "robot_motion_dashboard",
+      "type": "ROS2MotionDashboard",
+      "params": {
+        "joint": "",
+        "moved": false,
+        "units": "degrees"
+      },
+      "pos": [
+        4223.443329583268,
+        648.9826040494771
+      ],
+      "inputs": [
+        "joint",
+        "before",
+        "after",
+        "target",
+        "moved",
+        "units"
+      ],
+      "outputs": [
+        "dashboard",
+        "summary"
+      ],
+      "input_types": {
+        "joint": "Text",
+        "before": "Dict",
+        "after": "Dict",
+        "target": "Dict",
+        "moved": "Bool",
+        "units": "Text"
+      },
+      "output_types": {
+        "dashboard": "Image",
+        "summary": "Dict"
+      },
+      "input_defaults": {
+        "joint": "",
+        "moved": false,
+        "units": "degrees"
+      }
+    },
+    "robot_motion_out": {
+      "id": "robot_motion_out",
+      "type": "OutputImage",
+      "params": {},
+      "pos": [
+        4719.451676551366,
+        772.407297844604
+      ],
+      "inputs": [
+        "image"
+      ],
+      "outputs": [
+        "image"
+      ],
+      "input_types": {
+        "image": "Image"
+      },
+      "output_types": {
+        "image": "Image"
+      },
+      "input_defaults": {}
+    },
+    "robot_report_out": {
+      "id": "robot_report_out",
+      "type": "Output",
+      "params": {
+        "label": "Robot follow report"
+      },
+      "pos": [
+        4400.0,
+        1426.5
+      ],
+      "inputs": [
+        "value"
+      ],
+      "outputs": [],
+      "input_types": {
+        "value": "Any"
+      },
+      "output_types": {},
+      "input_defaults": {}
+    },
+    "robot": {
+      "id": "robot",
+      "type": "RobotDiscovery",
+      "params": {
+        "action": "start",
+        "run_id": "robot_driver",
+        "port_filter": "",
+        "probe_open": false,
+        "require_usb": true,
+        "serial_port": "",
+        "host": "127.0.0.1",
+        "port": 9090,
+        "state_topic": "/joint_states",
+        "command_topic": "/joint_commands",
+        "config_topic": "/joint_config",
+        "units": "degrees",
+        "driver": {}
+      },
+      "pos": [
+        390.0,
+        995.0
+      ],
+      "inputs": [
+        "trigger",
+        "driver",
+        "action",
+        "run_id",
+        "port_filter",
+        "probe_open",
+        "require_usb",
+        "serial_port",
+        "host",
+        "port",
+        "state_topic",
+        "command_topic",
+        "config_topic",
+        "units"
+      ],
+      "outputs": [
+        "found",
+        "ready",
+        "usb_ready",
+        "driver_running",
+        "usb",
+        "driver",
+        "robot",
+        "report"
+      ],
+      "input_types": {
+        "trigger": "Any",
+        "driver": "Dict",
+        "action": "Text",
+        "run_id": "Text",
+        "port_filter": "Text",
+        "probe_open": "Bool",
+        "require_usb": "Bool",
+        "serial_port": "Text",
+        "host": "Text",
+        "port": "Int",
+        "state_topic": "Text",
+        "command_topic": "Text",
+        "config_topic": "Text",
+        "units": "Text"
+      },
+      "output_types": {
+        "found": "Bool",
+        "ready": "Bool",
+        "usb_ready": "Bool",
+        "driver_running": "Bool",
+        "usb": "Dict",
+        "driver": "Dict",
+        "robot": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "action": "check",
+        "run_id": "robot_driver",
+        "port_filter": "",
+        "probe_open": false,
+        "require_usb": true,
+        "serial_port": "",
+        "host": "127.0.0.1",
+        "port": 9090,
+        "state_topic": "/joint_states",
+        "command_topic": "/joint_commands",
+        "config_topic": "/joint_config",
+        "units": "degrees",
+        "driver": {}
+      },
+      "input_choices": {
+        "action": [
+          "check",
+          "start",
+          "stop"
+        ],
+        "units": [
+          "radians",
+          "degrees"
+        ]
+      }
+    },
+    "robot_profile_out": {
+      "id": "robot_profile_out",
+      "type": "Output",
+      "params": {
+        "label": "Detected robot profile"
+      },
+      "pos": [
+        1000.0,
+        1715.5
+      ],
+      "inputs": [
+        "value"
+      ],
+      "outputs": [],
+      "input_types": {
+        "value": "Any"
+      },
+      "output_types": {},
+      "input_defaults": {}
+    },
+    "robot_discovery_report_out": {
+      "id": "robot_discovery_report_out",
+      "type": "Output",
+      "params": {
+        "label": "Robot discovery report"
+      },
+      "pos": [
+        1000.0,
+        1967.5
+      ],
+      "inputs": [
+        "value"
+      ],
+      "outputs": [],
+      "input_types": {
+        "value": "Any"
+      },
+      "output_types": {},
+      "input_defaults": {}
+    },
+    "cuda_filter_out": {
+      "id": "cuda_filter_out",
+      "type": "OutputImage",
+      "params": {},
+      "pos": [
+        4695.203055392731,
+        1679.2369656974943
+      ],
+      "inputs": [
+        "image"
+      ],
+      "outputs": [
+        "image"
+      ],
+      "input_types": {
+        "image": "Image"
+      },
+      "output_types": {
+        "image": "Image"
+      },
+      "input_defaults": {}
+    },
+    "cuda_filter": {
+      "id": "cuda_filter",
+      "type": "CUDAImageFilterStream",
+      "params": {
+        "op": "sobel_edges"
+      },
+      "pos": [
+        4386.265842578224,
+        1749.714587621147
+      ],
+      "inputs": [
+        "trigger",
+        "action",
+        "stream_id",
+        "source_url",
+        "op",
+        "amount",
+        "host",
+        "port",
+        "max_fps",
+        "max_width",
+        "jpeg_quality"
+      ],
+      "outputs": [
+        "preview",
+        "streaming",
+        "stream_url",
+        "snapshot_url",
+        "stream_id",
+        "report"
+      ],
+      "input_types": {
+        "trigger": "Any",
+        "action": "Text",
+        "stream_id": "Text",
+        "source_url": "Text",
+        "op": "Text",
+        "amount": "Float",
+        "host": "Text",
+        "port": "Int",
+        "max_fps": "Float",
+        "max_width": "Int",
+        "jpeg_quality": "Int"
+      },
+      "output_types": {
+        "preview": "Image",
+        "streaming": "Bool",
+        "stream_url": "Text",
+        "snapshot_url": "Text",
+        "stream_id": "Text",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "action": "start",
+        "stream_id": "cuda_filter",
+        "source_url": "",
+        "op": "grayscale",
+        "amount": 1.0,
+        "host": "127.0.0.1",
+        "port": 0,
+        "max_fps": 10.0,
+        "max_width": 960,
+        "jpeg_quality": 82
+      }
+    },
+    "preset": {
+      "id": "preset",
+      "type": "RobotDriverPreset",
+      "params": {
+        "preset": "so_arm101",
+        "state_topic": "/joint_states",
+        "command_topic": "/joint_commands",
+        "config_topic": "/joint_config",
+        "rate_hz": 15.0
+      },
+      "pos": [
+        80.0,
+        1193.0
+      ],
+      "inputs": [
+        "preset",
+        "state_topic",
+        "command_topic",
+        "config_topic",
+        "rate_hz"
+      ],
+      "outputs": [
+        "driver",
+        "report"
+      ],
+      "input_types": {
+        "preset": "Text",
+        "state_topic": "Text",
+        "command_topic": "Text",
+        "config_topic": "Text",
+        "rate_hz": "Float"
+      },
+      "output_types": {
+        "driver": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "preset": "so_arm101",
+        "state_topic": "/joint_states",
+        "command_topic": "/joint_commands",
+        "config_topic": "/joint_config",
+        "rate_hz": 15.0
+      }
+    },
+    "joint_state": {
+      "id": "joint_state",
+      "type": "ROS2NativeJointState",
+      "params": {
+        "topic": "/joint_states",
+        "units": "degrees",
+        "timeout": 10.0
+      },
+      "pos": [
+        1000.0,
+        785.5
+      ],
+      "inputs": [
+        "trigger",
+        "topic",
+        "units",
+        "timeout"
+      ],
+      "outputs": [
+        "pose",
+        "names",
+        "report"
+      ],
+      "input_types": {
+        "trigger": "Any",
+        "topic": "Text",
+        "units": "Text",
+        "timeout": "Float"
+      },
+      "output_types": {
+        "pose": "Dict",
+        "names": "List",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "topic": "/joint_states",
+        "units": "radians",
+        "timeout": 10.0
+      }
+    },
+    "shoulder_pan_index": {
+      "id": "shoulder_pan_index",
+      "type": "ListIndex",
+      "params": {
+        "index": 0
+      },
+      "pos": [
+        1850.0,
+        724.5
+      ],
+      "inputs": [
+        "items",
+        "index"
+      ],
+      "outputs": [
+        "value",
+        "found"
+      ],
+      "input_types": {
+        "items": "List",
+        "index": "Int"
+      },
+      "output_types": {
+        "value": "Any",
+        "found": "Bool"
+      },
+      "input_defaults": {}
     }
   },
   "edges": [
@@ -624,12 +1180,6 @@
       "to_port": "prompt"
     },
     {
-      "from": "live_reason",
-      "from_port": "state_url",
-      "to": "cv2_stream",
-      "to_port": "reasoning_state_url"
-    },
-    {
       "from": "cv2_stream",
       "from_port": "preview",
       "to": "overlay_out",
@@ -664,6 +1214,126 @@
       "from_port": "preview",
       "to": "reason_dashboard_out",
       "to_port": "image"
+    },
+    {
+      "from": "cv2_stream",
+      "from_port": "detection",
+      "to": "follow_cube",
+      "to_port": "detection"
+    },
+    {
+      "from": "follow_cube",
+      "from_port": "joint",
+      "to": "robot_motion_dashboard",
+      "to_port": "joint"
+    },
+    {
+      "from": "follow_cube",
+      "from_port": "before",
+      "to": "robot_motion_dashboard",
+      "to_port": "before"
+    },
+    {
+      "from": "follow_cube",
+      "from_port": "after",
+      "to": "robot_motion_dashboard",
+      "to_port": "after"
+    },
+    {
+      "from": "follow_cube",
+      "from_port": "target",
+      "to": "robot_motion_dashboard",
+      "to_port": "target"
+    },
+    {
+      "from": "follow_cube",
+      "from_port": "moved",
+      "to": "robot_motion_dashboard",
+      "to_port": "moved"
+    },
+    {
+      "from": "robot_motion_dashboard",
+      "from_port": "dashboard",
+      "to": "robot_motion_out",
+      "to_port": "image"
+    },
+    {
+      "from": "follow_cube",
+      "from_port": "report",
+      "to": "robot_report_out",
+      "to_port": "value"
+    },
+    {
+      "from": "robot",
+      "from_port": "report",
+      "to": "follow_cube",
+      "to_port": "trigger"
+    },
+    {
+      "from": "robot",
+      "from_port": "robot",
+      "to": "follow_cube",
+      "to_port": "robot"
+    },
+    {
+      "from": "robot",
+      "from_port": "robot",
+      "to": "robot_profile_out",
+      "to_port": "value"
+    },
+    {
+      "from": "cv2_stream",
+      "from_port": "detection_url",
+      "to": "follow_cube",
+      "to_port": "detection_url"
+    },
+    {
+      "from": "robot",
+      "from_port": "report",
+      "to": "robot_discovery_report_out",
+      "to_port": "value"
+    },
+    {
+      "from": "check",
+      "from_port": "report",
+      "to": "robot",
+      "to_port": "trigger"
+    },
+    {
+      "from": "cuda_filter",
+      "from_port": "preview",
+      "to": "cuda_filter_out",
+      "to_port": "image"
+    },
+    {
+      "from": "live_reason",
+      "from_port": "state_url",
+      "to": "cv2_stream",
+      "to_port": "reasoning_state_url"
+    },
+    {
+      "from": "preset",
+      "from_port": "driver",
+      "to": "robot",
+      "to_port": "driver"
+    },
+    {
+      "from": "robot",
+      "from_port": "report",
+      "to": "joint_state",
+      "to_port": "trigger"
+    },
+    {
+      "from": "joint_state",
+      "from_port": "names",
+      "to": "shoulder_pan_index",
+      "to_port": "items"
+    },
+    {
+      "from": "stream",
+      "from_port": "snapshot_url",
+      "to": "cuda_filter",
+      "to_port": "source_url"
     }
   ]
 }
