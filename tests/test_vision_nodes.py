@@ -516,3 +516,42 @@ def test_cube_template_uses_live_cv2_stream_and_qwen3():
     assert ("cv2_stream", "detection_url", "live_reason", "detection_url") not in edges
     assert ("joint_state", "names", "shoulder_pan_index", "items") in edges
     assert ("shoulder_pan_index", "value", "follow_cube", "joint") in edges
+
+
+def test_cube_rosbridge_template_uses_rosbridge_follow_nodes():
+    path = TEMPLATE_DIR / "vision-cv2-cube-rosbridge-reasoning.json"
+    workflow = json.loads(path.read_text(encoding="utf-8"))
+    node_types = {
+        node_id: meta["type"]
+        for node_id, meta in workflow["node_meta"].items()
+    }
+    package_names = {
+        package["name"]
+        for package in workflow["metadata"]["required_packages"]
+    }
+    edges = {
+        (edge["from"], edge["from_port"], edge["to"], edge["to_port"])
+        for edge in workflow["edges"]
+    }
+
+    assert {"blacknode-vision", "blacknode-ros2", "blacknode-cuda"} <= package_names
+    assert "blacknode-robot" not in package_names
+    assert not any(node_type.startswith("ROS2Native") for node_type in node_types.values())
+    assert "RobotDiscovery" not in node_types.values()
+    assert "RobotDriverPreset" not in node_types.values()
+    assert node_types["rosbridge_status"] == "ROS2RosbridgeStatus"
+    assert node_types["robot_bridge"] == "ROS2RobotDiscovery"
+    assert node_types["joint_state"] == "ROS2JointState"
+    assert node_types["follow_cube"] == "ROS2FollowDetectionJoint"
+    assert workflow["node_meta"]["follow_cube"]["params"]["armed"] is False
+    assert workflow["node_meta"]["follow_cube"]["params"]["host"] == "127.0.0.1"
+    assert workflow["node_meta"]["follow_cube"]["params"]["port"] == 9090
+    assert ("stream", "snapshot_url", "cv2_stream", "source_url") in edges
+    assert ("cv2_stream", "detection", "follow_cube", "detection") in edges
+    assert ("cv2_stream", "detection_url", "follow_cube", "detection_url") in edges
+    assert ("rosbridge_status", "report", "robot_bridge", "trigger") in edges
+    assert ("robot_bridge", "report", "joint_state", "trigger") in edges
+    assert ("robot_bridge", "report", "follow_cube", "trigger") in edges
+    assert ("robot_bridge", "robot", "follow_cube", "robot") in edges
+    assert ("joint_state", "names", "shoulder_pan_index", "items") in edges
+    assert ("shoulder_pan_index", "value", "follow_cube", "joint") in edges

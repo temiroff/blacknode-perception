@@ -85,6 +85,10 @@ rotation:=0
   the raw image, run live image-first Ollama/Qwen reasoning from the raw camera
   snapshot, resolve the target color from the reasoning state, and stream a live
   OpenCV tracking overlay and mask.
+- **Blacknode Vision CV2 Cube Rosbridge Follow** — run the same live
+  CV2/Qwen cube tracking flow, but command the robot through
+  `blacknode-ros2` rosbridge nodes at `ws://127.0.0.1:9090` instead of native
+  ROS 2 motion nodes or the USB robot package.
 
 For the common case, `./start.sh` auto-sources `/opt/ros/jazzy/setup.bash` and
 auto-sources a ROS workspace when it finds exactly one `ros2_ws/install/setup.bash`.
