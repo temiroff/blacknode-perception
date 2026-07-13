@@ -449,6 +449,8 @@ def find_detections(mask: Any, *, label: str, min_area: float, max_detections: i
             "found": True,
             "label": label,
             "center": {"x": cx, "y": cy},
+            "frame_width": int(image_w),
+            "frame_height": int(image_h),
             "bbox": {"x": int(x), "y": int(y), "width": int(w), "height": int(h)},
             "area": area,
             "area_ratio": area / max(1, image_w * image_h),
@@ -472,6 +474,16 @@ def tracking_status_text(target: dict[str, Any], lower: tuple[int, int, int], up
 
 def draw_overlay(frame: Any, detections: list[dict[str, Any]], label: str, status: str = "") -> Any:
     overlay = frame.copy()
+    image_h, image_w = overlay.shape[:2]
+    left_boundary = int(image_w / 3)
+    center_line = int(image_w / 2)
+    right_boundary = int(image_w * 2 / 3)
+    cv2.line(overlay, (left_boundary, 38), (left_boundary, image_h), (245, 158, 11), 1)
+    cv2.line(overlay, (center_line, 38), (center_line, image_h), (229, 237, 247), 2)
+    cv2.line(overlay, (right_boundary, 38), (right_boundary, image_h), (245, 158, 11), 1)
+    cv2.putText(overlay, "LEFT", (12, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (245, 158, 11), 1, cv2.LINE_AA)
+    cv2.putText(overlay, "CENTER", (center_line - 30, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (229, 237, 247), 1, cv2.LINE_AA)
+    cv2.putText(overlay, "RIGHT", (right_boundary + 8, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (245, 158, 11), 1, cv2.LINE_AA)
     if status:
         cv2.rectangle(overlay, (0, 0), (overlay.shape[1], 38), (15, 23, 42), -1)
         cv2.putText(
@@ -608,6 +620,8 @@ def capture_loop(args: argparse.Namespace, state: SharedState) -> None:
                 state.detection = {
                     "ok": True,
                     "found": bool(detections),
+                    "frame_width": int(frame.shape[1]),
+                    "frame_height": int(frame.shape[0]),
                     "detection": detection,
                     "detections": detections,
                     "lower_hsv": lower,
