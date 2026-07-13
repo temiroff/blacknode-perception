@@ -1330,6 +1330,12 @@
       "to_port": "items"
     },
     {
+      "from": "shoulder_pan_index",
+      "from_port": "value",
+      "to": "follow_cube",
+      "to_port": "joint"
+    },
+    {
       "from": "stream",
       "from_port": "snapshot_url",
       "to": "cuda_filter",

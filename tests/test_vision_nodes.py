@@ -514,3 +514,5 @@ def test_cube_template_uses_live_cv2_stream_and_qwen3():
     assert ("stream", "snapshot_url", "live_reason", "image_url") in edges
     assert ("live_reason", "preview", "reason_dashboard_out", "image") in edges
     assert ("cv2_stream", "detection_url", "live_reason", "detection_url") not in edges
+    assert ("joint_state", "names", "shoulder_pan_index", "items") in edges
+    assert ("shoulder_pan_index", "value", "follow_cube", "joint") in edges
