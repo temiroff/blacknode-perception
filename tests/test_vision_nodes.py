@@ -587,7 +587,9 @@ def test_cube_template_uses_live_cv2_stream_and_qwen3():
     assert workflow["node_meta"]["check"]["type"] == "ROS2RosbridgeServer"
     assert workflow["node_meta"]["preset"]["params"]["transport"] == "rosbridge"
     assert workflow["node_meta"]["joint_state"]["type"] == "ROS2JointState"
-    assert workflow["node_meta"]["follow_cube"]["type"] == "ROS2FollowDetectionJoint"
+    assert workflow["node_meta"]["follow_cube"]["type"] == "ROS2ContinuousFollowDetectionJoint"
+    assert workflow["node_meta"]["follow_cube"]["params"]["action"] == "start"
+    assert workflow["node_meta"]["follow_cube"]["params"]["loop_hz"] == 2.0
     assert workflow["node_meta"]["follow_cube"]["params"]["joint"] == "shoulder_pan"
     assert workflow["node_meta"]["follow_cube"]["params"]["armed"] is False
     assert workflow["node_meta"]["follow_cube"]["params"]["frame_width"] == 640
@@ -646,7 +648,9 @@ def test_cube_rosbridge_template_uses_rosbridge_follow_nodes():
     assert workflow["node_meta"]["preset"]["params"]["transport"] == "rosbridge"
     assert node_types["robot_bridge"] == "RobotDiscovery"
     assert node_types["joint_state"] == "ROS2JointState"
-    assert node_types["follow_cube"] == "ROS2FollowDetectionJoint"
+    assert node_types["follow_cube"] == "ROS2ContinuousFollowDetectionJoint"
+    assert workflow["node_meta"]["follow_cube"]["params"]["action"] == "start"
+    assert workflow["node_meta"]["follow_cube"]["params"]["loop_hz"] == 2.0
     assert workflow["node_meta"]["follow_cube"]["params"]["armed"] is False
     assert workflow["node_meta"]["follow_cube"]["params"]["host"] == "127.0.0.1"
     assert workflow["node_meta"]["follow_cube"]["params"]["port"] == 9090

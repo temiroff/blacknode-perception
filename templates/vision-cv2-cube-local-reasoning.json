@@ -29,7 +29,7 @@
         "node_types": [
           "ROS2RosbridgeServer",
           "ROS2JointState",
-          "ROS2FollowDetectionJoint",
+          "ROS2ContinuousFollowDetectionJoint",
           "ROS2MotionDashboard"
         ]
       },
@@ -573,8 +573,11 @@
     },
     "follow_cube": {
       "id": "follow_cube",
-      "type": "ROS2FollowDetectionJoint",
+      "type": "ROS2ContinuousFollowDetectionJoint",
       "params": {
+        "action": "start",
+        "run_id": "cube_follow",
+        "loop_hz": 2.0,
         "host": "127.0.0.1",
         "port": 9090,
         "state_topic": "/joint_states",
@@ -602,6 +605,9 @@
       ],
       "inputs": [
         "trigger",
+        "action",
+        "run_id",
+        "loop_hz",
         "detection",
         "detection_url",
         "robot",
@@ -625,6 +631,7 @@
         "timeout"
       ],
       "outputs": [
+        "running",
         "moved",
         "joint",
         "before",
@@ -636,6 +643,9 @@
       ],
       "input_types": {
         "trigger": "Any",
+        "action": "Text",
+        "run_id": "Text",
+        "loop_hz": "Float",
         "detection": "Dict",
         "state_topic": "Text",
         "command_topic": "Text",
@@ -659,6 +669,7 @@
         "detection_url": "Text"
       },
       "output_types": {
+        "running": "Bool",
         "moved": "Bool",
         "joint": "Text",
         "before": "Dict",
@@ -669,6 +680,9 @@
         "report": "Text"
       },
       "input_defaults": {
+        "action": "start",
+        "run_id": "vision_follow",
+        "loop_hz": 2.0,
         "state_topic": "/joint_states",
         "host": "127.0.0.1",
         "port": 9090,
@@ -691,6 +705,11 @@
         "detection_url": ""
       },
       "input_choices": {
+        "action": [
+          "start",
+          "stop",
+          "check"
+        ],
         "units": [
           "radians",
           "degrees"
