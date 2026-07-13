@@ -9,7 +9,7 @@
   },
   "metadata": {
     "template": true,
-    "description": "Open the local USB camera directly on Windows, Linux, or macOS, resolve a prompt/model target into HSV, stream live CV2 overlay/mask, run live image-first Ollama/Qwen reasoning, relay the clean camera feed through a CUDA GPU image filter, and pan a real robot's shoulder_pan joint to follow the tracked cube.",
+    "description": "Windows one-click path: open the local USB camera, automatically ensure a local rosbridge Docker service, publish the SO-ARM101 serial driver through rosbridge, stream CV2 and Qwen reasoning, and preview shoulder_pan tracking disarmed. Use the ROS2 Native template for direct rclpy control on Linux.",
     "color": "#2563eb",
     "required_packages": [
       {
@@ -27,9 +27,9 @@
         "name": "blacknode-ros2",
         "git_url": "https://github.com/temiroff/blacknode-ros2.git",
         "node_types": [
-          "ROS2SystemCheck",
-          "ROS2NativeJointState",
-          "ROS2NativeFollowDetectionJoint",
+          "ROS2RosbridgeServer",
+          "ROS2JointState",
+          "ROS2FollowDetectionJoint",
           "ROS2MotionDashboard"
         ]
       },
@@ -56,32 +56,42 @@
   "node_meta": {
     "check": {
       "id": "check",
-      "type": "ROS2SystemCheck",
+      "type": "ROS2RosbridgeServer",
       "params": {
-        "refresh": true
+        "action": "ensure",
+        "host": "127.0.0.1",
+        "port": 9090,
+        "timeout": 180.0
       },
       "pos": [
         80.0,
         1451.0
       ],
       "inputs": [
-        "refresh"
+        "action",
+        "host",
+        "port",
+        "timeout"
       ],
       "outputs": [
-        "available",
-        "backend",
+        "ready",
         "report"
       ],
       "input_types": {
-        "refresh": "Bool"
+        "action": "Text",
+        "host": "Text",
+        "port": "Int",
+        "timeout": "Float"
       },
       "output_types": {
-        "available": "Bool",
-        "backend": "Text",
+        "ready": "Bool",
         "report": "Text"
       },
       "input_defaults": {
-        "refresh": true
+        "action": "ensure",
+        "host": "127.0.0.1",
+        "port": 9090,
+        "timeout": 180.0
       }
     },
     "stream": {
@@ -551,8 +561,10 @@
     },
     "follow_cube": {
       "id": "follow_cube",
-      "type": "ROS2NativeFollowDetectionJoint",
+      "type": "ROS2FollowDetectionJoint",
       "params": {
+        "host": "127.0.0.1",
+        "port": 9090,
         "state_topic": "/joint_states",
         "command_topic": "/joint_commands",
         "config_topic": "/joint_config",
@@ -567,7 +579,7 @@
         "ramp_seconds": 0.35,
         "hold_seconds": 0.2,
         "rate_hz": 30.0,
-        "armed": true,
+        "armed": false,
         "timeout": 10.0,
         "robot": {},
         "detection_url": ""
@@ -581,6 +593,8 @@
         "detection",
         "detection_url",
         "robot",
+        "host",
+        "port",
         "state_topic",
         "command_topic",
         "config_topic",
@@ -628,6 +642,8 @@
         "armed": "Bool",
         "timeout": "Float",
         "robot": "Dict",
+        "host": "Text",
+        "port": "Int",
         "detection_url": "Text"
       },
       "output_types": {
@@ -642,6 +658,8 @@
       },
       "input_defaults": {
         "state_topic": "/joint_states",
+        "host": "127.0.0.1",
+        "port": 9090,
         "command_topic": "/joint_commands",
         "config_topic": "/joint_config",
         "joint": "",
@@ -987,7 +1005,10 @@
         "state_topic": "/joint_states",
         "command_topic": "/joint_commands",
         "config_topic": "/joint_config",
-        "rate_hz": 15.0
+        "rate_hz": 15.0,
+        "transport": "rosbridge",
+        "host": "127.0.0.1",
+        "port": 9090
       },
       "pos": [
         80.0,
@@ -998,7 +1019,10 @@
         "state_topic",
         "command_topic",
         "config_topic",
-        "rate_hz"
+        "rate_hz",
+        "transport",
+        "host",
+        "port"
       ],
       "outputs": [
         "driver",
@@ -1009,7 +1033,10 @@
         "state_topic": "Text",
         "command_topic": "Text",
         "config_topic": "Text",
-        "rate_hz": "Float"
+        "rate_hz": "Float",
+        "transport": "Text",
+        "host": "Text",
+        "port": "Int"
       },
       "output_types": {
         "driver": "Dict",
@@ -1020,13 +1047,18 @@
         "state_topic": "/joint_states",
         "command_topic": "/joint_commands",
         "config_topic": "/joint_config",
-        "rate_hz": 15.0
+        "rate_hz": 15.0,
+        "transport": "native",
+        "host": "127.0.0.1",
+        "port": 9090
       }
     },
     "joint_state": {
       "id": "joint_state",
-      "type": "ROS2NativeJointState",
+      "type": "ROS2JointState",
       "params": {
+        "host": "127.0.0.1",
+        "port": 9090,
         "topic": "/joint_states",
         "units": "degrees",
         "timeout": 10.0
@@ -1037,6 +1069,8 @@
       ],
       "inputs": [
         "trigger",
+        "host",
+        "port",
         "topic",
         "units",
         "timeout"
@@ -1048,6 +1082,8 @@
       ],
       "input_types": {
         "trigger": "Any",
+        "host": "Text",
+        "port": "Int",
         "topic": "Text",
         "units": "Text",
         "timeout": "Float"
@@ -1058,38 +1094,12 @@
         "report": "Text"
       },
       "input_defaults": {
+        "host": "127.0.0.1",
+        "port": 9090,
         "topic": "/joint_states",
         "units": "radians",
         "timeout": 10.0
       }
-    },
-    "shoulder_pan_index": {
-      "id": "shoulder_pan_index",
-      "type": "ListIndex",
-      "params": {
-        "index": 0
-      },
-      "pos": [
-        1850.0,
-        724.5
-      ],
-      "inputs": [
-        "items",
-        "index"
-      ],
-      "outputs": [
-        "value",
-        "found"
-      ],
-      "input_types": {
-        "items": "List",
-        "index": "Int"
-      },
-      "output_types": {
-        "value": "Any",
-        "found": "Bool"
-      },
-      "input_defaults": {}
     }
   },
   "edges": [
@@ -1260,18 +1270,6 @@
       "from_port": "report",
       "to": "joint_state",
       "to_port": "trigger"
-    },
-    {
-      "from": "joint_state",
-      "from_port": "names",
-      "to": "shoulder_pan_index",
-      "to_port": "items"
-    },
-    {
-      "from": "shoulder_pan_index",
-      "from_port": "value",
-      "to": "follow_cube",
-      "to_port": "joint"
     },
     {
       "from": "stream",

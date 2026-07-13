@@ -558,8 +558,15 @@ def test_cube_template_uses_live_cv2_stream_and_qwen3():
     assert ("stream", "snapshot_url", "live_reason", "image_url") in edges
     assert ("live_reason", "preview", "reason_dashboard_out", "image") in edges
     assert ("cv2_stream", "detection_url", "live_reason", "detection_url") not in edges
-    assert ("joint_state", "names", "shoulder_pan_index", "items") in edges
-    assert ("shoulder_pan_index", "value", "follow_cube", "joint") in edges
+    assert workflow["node_meta"]["check"]["type"] == "ROS2RosbridgeServer"
+    assert workflow["node_meta"]["preset"]["params"]["transport"] == "rosbridge"
+    assert workflow["node_meta"]["joint_state"]["type"] == "ROS2JointState"
+    assert workflow["node_meta"]["follow_cube"]["type"] == "ROS2FollowDetectionJoint"
+    assert workflow["node_meta"]["follow_cube"]["params"]["joint"] == "shoulder_pan"
+    assert workflow["node_meta"]["follow_cube"]["params"]["armed"] is False
+    assert "shoulder_pan_index" not in workflow["node_meta"]
+    assert ("joint_state", "names", "shoulder_pan_index", "items") not in edges
+    assert ("shoulder_pan_index", "value", "follow_cube", "joint") not in edges
 
 
 def test_cube_native_ros2_template_keeps_ros_camera_transport():
