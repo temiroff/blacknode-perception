@@ -605,13 +605,14 @@ def test_cube_rosbridge_template_uses_rosbridge_follow_nodes():
         for edge in workflow["edges"]
     }
 
-    assert {"blacknode-vision", "blacknode-ros2", "blacknode-cuda"} <= package_names
-    assert "blacknode-robot" not in package_names
+    assert {"blacknode-vision", "blacknode-ros2", "blacknode-robot", "blacknode-cuda"} <= package_names
     assert not any(node_type.startswith("ROS2Native") for node_type in node_types.values())
-    assert "RobotDiscovery" not in node_types.values()
-    assert "RobotDriverPreset" not in node_types.values()
-    assert node_types["rosbridge_status"] == "ROS2RosbridgeStatus"
-    assert node_types["robot_bridge"] == "ROS2RobotDiscovery"
+    assert node_types["check"] == "ROS2RosbridgeServer"
+    assert node_types["stream"] == "CV2CameraStream"
+    assert "camera_run" not in node_types
+    assert node_types["preset"] == "RobotDriverPreset"
+    assert workflow["node_meta"]["preset"]["params"]["transport"] == "rosbridge"
+    assert node_types["robot_bridge"] == "RobotDiscovery"
     assert node_types["joint_state"] == "ROS2JointState"
     assert node_types["follow_cube"] == "ROS2FollowDetectionJoint"
     assert workflow["node_meta"]["follow_cube"]["params"]["armed"] is False
@@ -620,9 +621,9 @@ def test_cube_rosbridge_template_uses_rosbridge_follow_nodes():
     assert ("stream", "snapshot_url", "cv2_stream", "source_url") in edges
     assert ("cv2_stream", "detection", "follow_cube", "detection") in edges
     assert ("cv2_stream", "detection_url", "follow_cube", "detection_url") in edges
-    assert ("rosbridge_status", "report", "robot_bridge", "trigger") in edges
+    assert ("check", "report", "robot_bridge", "trigger") in edges
+    assert ("preset", "driver", "robot_bridge", "driver") in edges
     assert ("robot_bridge", "report", "joint_state", "trigger") in edges
     assert ("robot_bridge", "report", "follow_cube", "trigger") in edges
     assert ("robot_bridge", "robot", "follow_cube", "robot") in edges
-    assert ("joint_state", "names", "shoulder_pan_index", "items") in edges
-    assert ("shoulder_pan_index", "value", "follow_cube", "joint") in edges
+    assert "shoulder_pan_index" not in node_types

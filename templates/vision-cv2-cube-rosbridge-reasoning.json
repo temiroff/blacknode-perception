@@ -9,13 +9,14 @@
   },
   "metadata": {
     "template": true,
-    "description": "Start the bundled USB/ROS camera stream, resolve a prompt/model target into HSV, stream live CV2 overlay/mask, run live image-first Ollama/Qwen reasoning, relay the clean camera feed through the CUDA GPU image filter, and follow the tracked cube by commanding a real robot over rosbridge at ws://127.0.0.1:9090. Safe by default: set the Follow Detection node armed=true only after ROS2RosbridgeStatus and ROS2RobotDiscovery are ready.",
+    "description": "Windows rosbridge path: automatically start local rosbridge, discover COM3/USB, launch the SO-ARM101 serial driver, stream camera reasoning, and preview shoulder_pan tracking. Motion stays disarmed until explicitly enabled.",
     "color": "#2563eb",
     "required_packages": [
       {
         "name": "blacknode-vision",
         "git_url": "https://github.com/temiroff/blacknode-vision.git",
         "node_types": [
+          "CV2CameraStream",
           "CV2ColorObjectStream",
           "CV2ColorObjectTracker",
           "CV2HSVMask",
@@ -26,14 +27,18 @@
         "name": "blacknode-ros2",
         "git_url": "https://github.com/temiroff/blacknode-ros2.git",
         "node_types": [
-          "ROS2SystemCheck",
-          "ROS2Run",
-          "ROS2ImageStream",
-          "ROS2RosbridgeStatus",
-          "ROS2RobotDiscovery",
+          "ROS2RosbridgeServer",
           "ROS2JointState",
           "ROS2FollowDetectionJoint",
           "ROS2MotionDashboard"
+        ]
+      },
+      {
+        "name": "blacknode-robot",
+        "git_url": "https://github.com/temiroff/blacknode-robot.git",
+        "node_types": [
+          "RobotDriverPreset",
+          "RobotDiscovery"
         ]
       },
       {
@@ -48,109 +53,59 @@
   "node_meta": {
     "check": {
       "id": "check",
-      "type": "ROS2SystemCheck",
+      "type": "ROS2RosbridgeServer",
       "params": {
-        "refresh": true
+        "action": "ensure",
+        "host": "127.0.0.1",
+        "port": 9090,
+        "timeout": 180.0
       },
       "pos": [
         80.0,
         1451.0
       ],
       "inputs": [
-        "refresh"
-      ],
-      "outputs": [
-        "available",
-        "backend",
-        "report"
-      ],
-      "input_types": {
-        "refresh": "Bool"
-      },
-      "output_types": {
-        "available": "Bool",
-        "backend": "Text",
-        "report": "Text"
-      },
-      "input_defaults": {
-        "refresh": true
-      }
-    },
-    "camera_run": {
-      "id": "camera_run",
-      "type": "ROS2Run",
-      "params": {
-        "action": "start",
-        "run_id": "vision_camera",
-        "package": "blacknode_usb_camera",
-        "executable": "usb_camera",
-        "arguments": "--ros-args -p device:=0 -p image_topic:=/camera/image_raw -p width:=640 -p height:=480 -p hz:=30.0",
-        "expected_topic": "/camera/image_raw",
-        "wait_seconds": 10.0
-      },
-      "pos": [
-        390.0,
-        1598.0
-      ],
-      "inputs": [
-        "trigger",
         "action",
-        "run_id",
-        "package",
-        "executable",
-        "arguments",
-        "expected_topic",
-        "wait_seconds"
+        "host",
+        "port",
+        "timeout"
       ],
       "outputs": [
-        "running",
-        "run_id",
+        "ready",
         "report"
       ],
       "input_types": {
-        "trigger": "Any",
         "action": "Text",
-        "run_id": "Text",
-        "package": "Text",
-        "executable": "Text",
-        "arguments": "Text",
-        "expected_topic": "Text",
-        "wait_seconds": "Float"
+        "host": "Text",
+        "port": "Int",
+        "timeout": "Float"
       },
       "output_types": {
-        "running": "Bool",
-        "run_id": "Text",
+        "ready": "Bool",
         "report": "Text"
       },
       "input_defaults": {
-        "action": "start",
-        "run_id": "vision_camera",
-        "package": "blacknode_usb_camera",
-        "executable": "usb_camera",
-        "arguments": "--ros-args -p device:=0 -p image_topic:=/camera/image_raw -p width:=640 -p height:=480 -p hz:=30.0",
-        "expected_topic": "/camera/image_raw",
-        "wait_seconds": 10.0
-      },
-      "input_choices": {
-        "action": [
-          "start",
-          "stop"
-        ]
+        "action": "ensure",
+        "host": "127.0.0.1",
+        "port": 9090,
+        "timeout": 180.0
       }
     },
     "stream": {
       "id": "stream",
-      "type": "ROS2ImageStream",
+      "type": "CV2CameraStream",
       "params": {
         "action": "start",
         "stream_id": "vision_camera",
-        "topic": "/camera/image_raw",
-        "message_type": "auto",
+        "device": "0",
+        "backend": "auto",
+        "width": 640,
+        "height": 480,
         "host": "127.0.0.1",
         "port": 0,
-        "max_fps": 10.0,
+        "max_fps": 15.0,
         "max_width": 960,
-        "jpeg_quality": 80
+        "jpeg_quality": 82
       },
       "pos": [
         1000.0,
@@ -160,8 +115,10 @@
         "trigger",
         "action",
         "stream_id",
-        "topic",
-        "message_type",
+        "device",
+        "backend",
+        "width",
+        "height",
         "host",
         "port",
         "max_fps",
@@ -173,6 +130,7 @@
         "streaming",
         "stream_url",
         "snapshot_url",
+        "health_url",
         "stream_id",
         "report"
       ],
@@ -180,8 +138,10 @@
         "trigger": "Any",
         "action": "Text",
         "stream_id": "Text",
-        "topic": "Text",
-        "message_type": "Text",
+        "device": "Text",
+        "backend": "Text",
+        "width": "Int",
+        "height": "Int",
         "host": "Text",
         "port": "Int",
         "max_fps": "Float",
@@ -193,29 +153,35 @@
         "streaming": "Bool",
         "stream_url": "Text",
         "snapshot_url": "Text",
+        "health_url": "Text",
         "stream_id": "Text",
         "report": "Text"
       },
       "input_defaults": {
         "action": "start",
         "stream_id": "vision_camera",
-        "topic": "/camera/image_raw",
-        "message_type": "auto",
+        "device": "0",
+        "backend": "auto",
+        "width": 640,
+        "height": 480,
         "host": "127.0.0.1",
         "port": 0,
-        "max_fps": 10.0,
+        "max_fps": 15.0,
         "max_width": 960,
-        "jpeg_quality": 80
+        "jpeg_quality": 82
       },
       "input_choices": {
         "action": [
           "start",
           "stop"
         ],
-        "message_type": [
+        "backend": [
           "auto",
-          "raw",
-          "compressed"
+          "dshow",
+          "msmf",
+          "v4l2",
+          "avfoundation",
+          "any"
         ]
       }
     },
@@ -981,156 +947,78 @@
         ]
       }
     },
-    "shoulder_pan_index": {
-      "id": "shoulder_pan_index",
-      "type": "ListIndex",
+    "preset": {
+      "id": "preset",
+      "type": "RobotDriverPreset",
       "params": {
-        "index": 0
-      },
-      "pos": [
-        1850.0,
-        724.5
-      ],
-      "inputs": [
-        "items",
-        "index"
-      ],
-      "outputs": [
-        "value",
-        "found"
-      ],
-      "input_types": {
-        "items": "List",
-        "index": "Int"
-      },
-      "output_types": {
-        "value": "Any",
-        "found": "Bool"
-      },
-      "input_defaults": {}
-    },
-    "rosbridge_status": {
-      "id": "rosbridge_status",
-      "type": "ROS2RosbridgeStatus",
-      "params": {
-        "host": "127.0.0.1",
-        "port": 9090,
+        "preset": "so_arm101",
+        "state_topic": "/joint_states",
+        "command_topic": "/joint_commands",
         "config_topic": "/joint_config",
-        "timeout": 10.0
+        "rate_hz": 15.0,
+        "transport": "rosbridge",
+        "host": "127.0.0.1",
+        "port": 9090
       },
-      "pos": [
-        80.0,
-        995.0
-      ],
-      "inputs": [
-        "host",
-        "port",
-        "config_topic",
-        "timeout"
-      ],
-      "outputs": [
-        "connected",
-        "ready",
-        "config",
-        "report"
-      ],
+      "pos": [80.0, 1193.0],
+      "inputs": ["preset", "state_topic", "command_topic", "config_topic", "rate_hz", "transport", "host", "port"],
+      "outputs": ["driver", "report"],
       "input_types": {
-        "host": "Text",
-        "port": "Int",
-        "config_topic": "Text",
-        "timeout": "Float"
+        "preset": "Text", "state_topic": "Text", "command_topic": "Text", "config_topic": "Text",
+        "rate_hz": "Float", "transport": "Text", "host": "Text", "port": "Int"
       },
-      "output_types": {
-        "connected": "Bool",
-        "ready": "Bool",
-        "config": "Dict",
-        "report": "Text"
-      },
+      "output_types": {"driver": "Dict", "report": "Text"},
       "input_defaults": {
-        "host": "127.0.0.1",
-        "port": 9090,
-        "config_topic": "/joint_config",
-        "timeout": 10.0
+        "preset": "so_arm101", "state_topic": "/joint_states", "command_topic": "/joint_commands",
+        "config_topic": "/joint_config", "rate_hz": 15.0, "transport": "native",
+        "host": "127.0.0.1", "port": 9090
       }
     },
     "robot_bridge": {
       "id": "robot_bridge",
-      "type": "ROS2RobotDiscovery",
+      "type": "RobotDiscovery",
       "params": {
+        "action": "start",
+        "run_id": "robot_driver",
+        "port_filter": "",
+        "probe_open": false,
+        "require_usb": true,
+        "serial_port": "",
         "host": "127.0.0.1",
         "port": 9090,
         "state_topic": "/joint_states",
         "command_topic": "/joint_commands",
         "config_topic": "/joint_config",
         "units": "degrees",
-        "timeout": 10.0
+        "driver": {}
       },
-      "pos": [
-        390.0,
-        995.0
-      ],
+      "pos": [390.0, 995.0],
       "inputs": [
-        "trigger",
-        "host",
-        "port",
-        "state_topic",
-        "command_topic",
-        "config_topic",
-        "units",
-        "timeout"
+        "trigger", "driver", "action", "run_id", "port_filter", "probe_open", "require_usb",
+        "serial_port", "host", "port", "state_topic", "command_topic", "config_topic", "units"
       ],
-      "outputs": [
-        "connected",
-        "ready",
-        "robot",
-        "joints",
-        "pose",
-        "report"
-      ],
+      "outputs": ["found", "ready", "usb_ready", "driver_running", "usb", "driver", "robot", "report"],
       "input_types": {
-        "trigger": "Any",
-        "host": "Text",
-        "port": "Int",
-        "state_topic": "Text",
-        "command_topic": "Text",
-        "config_topic": "Text",
-        "units": "Text",
-        "timeout": "Float"
+        "trigger": "Any", "driver": "Dict", "action": "Text", "run_id": "Text", "port_filter": "Text",
+        "probe_open": "Bool", "require_usb": "Bool", "serial_port": "Text", "host": "Text",
+        "port": "Int", "state_topic": "Text", "command_topic": "Text", "config_topic": "Text", "units": "Text"
       },
       "output_types": {
-        "connected": "Bool",
-        "ready": "Bool",
-        "robot": "Dict",
-        "joints": "List",
-        "pose": "Dict",
-        "report": "Text"
+        "found": "Bool", "ready": "Bool", "usb_ready": "Bool", "driver_running": "Bool", "usb": "Dict",
+        "driver": "Dict", "robot": "Dict", "report": "Text"
       },
       "input_defaults": {
-        "host": "127.0.0.1",
-        "port": 9090,
-        "state_topic": "/joint_states",
-        "command_topic": "/joint_commands",
-        "config_topic": "/joint_config",
-        "units": "degrees",
-        "timeout": 10.0
+        "action": "check", "run_id": "robot_driver", "port_filter": "", "probe_open": false,
+        "require_usb": true, "serial_port": "", "host": "127.0.0.1", "port": 9090,
+        "state_topic": "/joint_states", "command_topic": "/joint_commands", "config_topic": "/joint_config",
+        "units": "degrees", "driver": {}
       },
-      "input_choices": {
-        "units": [
-          "radians",
-          "degrees"
-        ]
-      }
+      "input_choices": {"action": ["check", "start", "stop"], "units": ["radians", "degrees"]}
     }
   },
   "edges": [
     {
       "from": "check",
-      "from_port": "report",
-      "to": "camera_run",
-      "to_port": "trigger"
-    },
-    {
-      "from": "camera_run",
       "from_port": "report",
       "to": "stream",
       "to_port": "trigger"
@@ -1262,28 +1150,22 @@
       "to_port": "reasoning_state_url"
     },
     {
-      "from": "joint_state",
-      "from_port": "names",
-      "to": "shoulder_pan_index",
-      "to_port": "items"
-    },
-    {
-      "from": "shoulder_pan_index",
-      "from_port": "value",
-      "to": "follow_cube",
-      "to_port": "joint"
-    },
-    {
       "from": "stream",
       "from_port": "snapshot_url",
       "to": "cuda_filter",
       "to_port": "source_url"
     },
     {
-      "from": "rosbridge_status",
+      "from": "check",
       "from_port": "report",
       "to": "robot_bridge",
       "to_port": "trigger"
+    },
+    {
+      "from": "preset",
+      "from_port": "driver",
+      "to": "robot_bridge",
+      "to_port": "driver"
     },
     {
       "from": "robot_bridge",
