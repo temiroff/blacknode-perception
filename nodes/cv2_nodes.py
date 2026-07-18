@@ -40,6 +40,138 @@ _HSV_COLOR_RANGES: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] 
     "white": ((0, 0, 180), (179, 60, 255)),
     "black": ((0, 0, 0), (179, 255, 70)),
 }
+
+_CALIBRATION_SAMPLES: dict[str, dict[str, Any]] = {}
+
+
+@node(
+    name="CameraCalibration",
+    category="Camera",
+    description="Capture checkerboard views, solve camera intrinsics/FOV, and attach them to a frame stream.",
+    primary_inputs=["trigger", "image", "frame_stream"],
+    primary_outputs=["calibrated_stream", "calibration", "report"],
+    inputs={
+        "trigger": AnyPort,
+        "action": Enum(["capture", "reset", "solve"], default="capture"),
+        "stream_id": Text(default="camera_0"),
+        "image": Image(default=""),
+        "frame_stream": Dict(default={}),
+        "frames": List(default=[]),
+        "board_columns": Int(default=9),
+        "board_rows": Int(default=6),
+        "square_size": Float(default=0.025),
+        "min_samples": Int(default=12),
+    },
+    outputs={"calibration": Dict, "calibrated_stream": Dict, "samples": Int, "ready": Bool, "report": Text},
+)
+def camera_calibration(ctx: dict) -> dict:
+    """Collect checkerboard observations and solve camera intrinsics/FOV."""
+    frame_stream = dict(ctx.get("frame_stream") or {})
+    empty = {"calibration": {}, "calibrated_stream": frame_stream, "samples": 0, "ready": False}
+    if cv2 is None or np is None:
+        return {**empty, "report": f"camera calibration unavailable: {_CV2_IMPORT_ERROR}"}
+    key = str(ctx.get("stream_id") or frame_stream.get("stream_id") or "camera_0")
+    action = str(ctx.get("action") or "capture").lower()
+    cols = max(2, int(ctx.get("board_columns") or 9))
+    rows = max(2, int(ctx.get("board_rows") or 6))
+    square = max(1e-6, float(ctx.get("square_size") or 0.025))
+    board = (cols, rows, square)
+    if action == "reset":
+        _CALIBRATION_SAMPLES.pop(key, None)
+        return {**empty, "report": f"camera calibration reset for {key}"}
+    state = _CALIBRATION_SAMPLES.get(key)
+    if state is None or tuple(state.get("board") or ()) != board:
+        state = {"board": board, "samples": []}
+        _CALIBRATION_SAMPLES[key] = state
+    samples = state["samples"]
+    if action == "capture":
+        sources = []
+        if ctx.get("image") not in (None, ""):
+            sources.append(ctx.get("image"))
+        sources.extend(list(ctx.get("frames") or []))
+        if not sources and frame_stream.get("snapshot_url"):
+            sources.append(frame_stream["snapshot_url"])
+        captured = 0
+        rejected = 0
+        for frame in sources:
+            image = frame
+            if isinstance(frame, str):
+                image, _ = _decode_image_bgr(frame)
+            if image is None or not hasattr(image, "shape"):
+                rejected += 1
+                continue
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+            size = tuple(int(value) for value in gray.shape[::-1])
+            if samples and tuple(samples[0][1]) != size:
+                rejected += 1
+                continue
+            found, corners = cv2.findChessboardCorners(
+                gray,
+                (cols, rows),
+                getattr(cv2, "CALIB_CB_ADAPTIVE_THRESH", 0) | getattr(cv2, "CALIB_CB_NORMALIZE_IMAGE", 0),
+            )
+            if found:
+                criteria = (
+                    getattr(cv2, "TERM_CRITERIA_EPS", 2) + getattr(cv2, "TERM_CRITERIA_MAX_ITER", 1),
+                    30,
+                    0.001,
+                )
+                corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+                samples.append((corners, size))
+                captured += 1
+            else:
+                rejected += 1
+        required = max(3, int(ctx.get("min_samples") or 12))
+        return {
+            **empty,
+            "samples": len(samples),
+            "report": (
+                f"captured {captured} checkerboard view(s) for {key}; {len(samples)}/{required} stored"
+                + (f"; rejected {rejected}" if rejected else "")
+            ),
+        }
+    required = max(3, int(ctx.get("min_samples") or 12))
+    if action == "solve" and len(samples) >= required:
+        object_points = np.zeros((rows * cols, 3), np.float32)
+        object_points[:, :2] = np.mgrid[0:cols, 0:rows].T.reshape(-1, 2) * square
+        rms, matrix, distortion, _, _ = cv2.calibrateCamera(
+            [object_points.copy() for _ in samples],
+            [item[0] for item in samples], samples[0][1], None)
+        width, height = samples[0][1]
+        fx, fy = float(matrix[0, 0]), float(matrix[1, 1])
+        cx, cy = float(matrix[0, 2]), float(matrix[1, 2])
+        fov_horizontal = float(2 * np.degrees(np.arctan(width / (2 * fx))))
+        fov_vertical = float(2 * np.degrees(np.arctan(height / (2 * fy))))
+        calibration = {
+            "kind": "blacknode.camera-calibration",
+            "schema_version": 1,
+            "stream_id": key,
+            "camera_model": "opencv-pinhole",
+            "camera_matrix": matrix.tolist(),
+            "distortion": distortion.reshape(-1).tolist(),
+            "fx": fx, "fy": fy, "cx": cx, "cy": cy,
+            "rms_error": float(rms),
+            "fov_horizontal": fov_horizontal,
+            "fov_vertical": fov_vertical,
+            "width": int(width), "height": int(height),
+            "board_columns": cols, "board_rows": rows,
+            "square_size": square, "samples": len(samples),
+        }
+        calibrated_stream = {
+            **frame_stream,
+            "stream_id": str(frame_stream.get("stream_id") or key),
+            "camera_model": calibration["camera_model"],
+            "fx": fx, "fy": fy, "cx": cx, "cy": cy,
+            "fov_horizontal": fov_horizontal,
+            "fov_vertical": fov_vertical,
+            "distortion": calibration["distortion"],
+            "calibration": calibration,
+        }
+        return {"calibration": calibration, "calibrated_stream": calibrated_stream,
+                "samples": len(samples), "ready": True,
+                "report": f"camera calibration solved for {key} with RMS error {float(rms):.5f}"}
+    return {**empty, "samples": len(samples),
+            "report": f"checkerboard samples: {len(samples)}; need {required} to solve"}
 _COLOR_ALIASES: dict[str, str] = {
     "red": "red",
     "orange": "orange",

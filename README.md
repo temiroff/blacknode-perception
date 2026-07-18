@@ -69,6 +69,7 @@ rotation:=0
 | Node | What it does |
 |---|---|
 | `Camera` | Discovers, selects, and streams one local camera with a live preview; duplicate it for more cameras |
+| `CameraCalibration` | Captures checkerboard views, solves intrinsics and field of view, and emits a calibrated camera stream |
 | `VisionFramePrompt` | Builds a concise robot-vision prompt for one camera frame |
 | `VisionDetectionPrompt` | Builds an LLM prompt from CV2 detections for local reasoning |
 | `VisionStreamStatus` | Renders live camera stream readiness as a dashboard image |
@@ -79,6 +80,29 @@ rotation:=0
 | `CV2ColorTargetHint` | Converts target/reasoning text like `track red cube` into label and HSV settings for CV2 tracking |
 | `CV2ColorObjectTracker` | Tracks colored objects such as cubes and returns overlay, mask, center, area, and detections |
 | `CV2ColorObjectStream` | Starts live MJPEG overlay and mask streams from a camera snapshot URL and exposes current snapshot and detection JSON |
+
+## Camera calibration
+
+Connect `Camera.frame_stream` to `CameraCalibration.frame_stream`. Use a printed
+checkerboard and set `board_columns` and `board_rows` to its number of inner
+corners, then set `square_size` to the measured edge length of one square in
+meters. Keep the camera's resolution and focus fixed while calibrating.
+
+Run the node with `action=capture` for at least `min_samples` varied views. Move
+the board across the image, tilt it in different directions, and include both
+near and far views. Each cook captures the current `snapshot_url`; an `image`
+input or a batch `frames` list can be supplied instead. Views with no complete
+checkerboard or a different resolution are rejected. Use `action=reset` to
+discard stored observations for the selected `stream_id`.
+
+After collecting the views, run with `action=solve`. The node reports the RMS
+reprojection error and emits a versioned `blacknode.camera-calibration` artifact
+containing image size, camera matrix, distortion coefficients, `fx`, `fy`, `cx`,
+`cy`, horizontal/vertical field of view, board settings, and sample count. Its
+`calibrated_stream` output copies the input frame-stream handle and attaches the
+same intrinsics and calibration artifact. Connect that output to dataset camera
+collection so the recorder stores the calibration alongside the camera stream
+metadata for later replay, simulation, and training workflows.
 
 ## Templates
 

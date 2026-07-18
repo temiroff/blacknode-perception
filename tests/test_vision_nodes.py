@@ -15,6 +15,7 @@ TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "templates"
 
 EXPECTED_NODES = {
     "Camera": "Camera",
+    "CameraCalibration": "Camera",
     "CameraDiscovery": "Camera",
     "CameraSelect": "Camera",
     "CameraStream": "Camera",
@@ -218,6 +219,48 @@ def test_cv2_camera_stream_starts_native_runtime(monkeypatch):
     assert calls[0]["backend"] == "auto"
     assert calls[0]["width"] == 640
     assert calls[0]["height"] == 480
+
+
+def test_camera_calibration_resets_and_attaches_intrinsics_to_stream(monkeypatch):
+    fn = _NODE_REGISTRY["CameraCalibration"]
+    reset = fn({"action": "reset", "stream_id": "wrist"})
+    assert reset["samples"] == 0
+    assert reset["ready"] is False
+
+    corners = np.zeros((6, 1, 2), dtype=np.float32)
+    fn.__globals__["_CALIBRATION_SAMPLES"]["wrist"] = {
+        "board": (3, 2, 0.02),
+        "samples": [(corners.copy(), (1280, 720)) for _ in range(3)],
+    }
+    matrix = np.asarray([
+        [1000.0, 0.0, 640.0],
+        [0.0, 900.0, 360.0],
+        [0.0, 0.0, 1.0],
+    ])
+    monkeypatch.setattr(
+        fn.__globals__["cv2"],
+        "calibrateCamera",
+        lambda *_args, **_kwargs: (0.125, matrix, np.asarray([[0.1, -0.05, 0.0, 0.0, 0.0]]), [], []),
+    )
+
+    result = fn({
+        "action": "solve",
+        "stream_id": "wrist",
+        "frame_stream": {"kind": "blacknode.frame-stream", "stream_id": "wrist"},
+        "board_columns": 3,
+        "board_rows": 2,
+        "square_size": 0.02,
+        "min_samples": 3,
+    })
+
+    assert result["ready"] is True
+    assert result["calibration"]["kind"] == "blacknode.camera-calibration"
+    assert result["calibration"]["fx"] == 1000.0
+    assert result["calibration"]["fy"] == 900.0
+    assert result["calibration"]["width"] == 1280
+    assert result["calibration"]["height"] == 720
+    assert result["calibrated_stream"]["calibration"] == result["calibration"]
+    assert result["calibrated_stream"]["fov_horizontal"] > 0.0
 
 
 def test_camera_select_picks_discovered_device():
