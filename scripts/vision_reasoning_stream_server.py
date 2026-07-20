@@ -438,7 +438,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-width", type=int, default=960)
     parser.add_argument("--source-timeout", type=float, default=4.0)
     parser.add_argument("--request-timeout", type=float, default=180.0)
-    parser.add_argument("--title", default="Blacknode Live Vision Reasoning")
+    parser.add_argument("--title", default="Live Reasoning")
     return parser.parse_args()
 
 

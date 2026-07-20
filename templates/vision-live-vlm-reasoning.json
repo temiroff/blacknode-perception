@@ -4,18 +4,18 @@
   "name": "Live VLM Reasoning",
   "saved_at": "2026-07-10T00:00:00",
   "entrypoint": {
-    "node_id": "reasoning_out",
-    "port": "image"
+    "node_id": "reasoning",
+    "port": "dashboard"
   },
   "metadata": {
     "template": true,
-    "description": "Start the local camera, show a live stream, send its latest frame to a VLM, and render visible observations/evidence/action on a dashboard.",
+    "description": "Start the local camera and a continuous VLM reasoning loop that periodically describes the latest frame on a live dashboard.",
     "color": "#18a058",
     "required_packages": [
       {
         "name": "blacknode-perception",
         "git_url": "https://github.com/temiroff/blacknode-perception.git",
-        "node_types": ["Camera", "FramePrompt", "VLM", "ReasoningDashboard"]
+        "node_types": ["Camera", "ReasoningStream"]
       }
     ]
   },
@@ -35,7 +35,7 @@
         "max_width": 960,
         "jpeg_quality": 82
       },
-      "pos": [390, 120],
+      "pos": [390, 160],
       "inputs": ["trigger", "action", "selection", "device", "backend", "width", "height", "host", "port", "max_fps", "max_width", "jpeg_quality"],
       "outputs": ["preview", "streaming", "stream_url", "snapshot_url", "health_url", "frame_stream", "stream_id", "report"],
       "input_types": {
@@ -56,7 +56,7 @@
         "preview": "Image",
         "streaming": "Bool",
         "stream_url": "Text",
-        "snapshot_url": "Image",
+        "snapshot_url": "Text",
         "health_url": "Text",
         "frame_stream": "Dict",
         "stream_id": "Text",
@@ -79,147 +79,92 @@
         "backend": ["auto", "dshow", "msmf", "v4l2", "avfoundation", "any"]
       }
     },
-    "prompt": {
-      "id": "prompt",
-      "type": "FramePrompt",
+    "reasoning": {
+      "id": "reasoning",
+      "type": "ReasoningStream",
       "params": {
-        "question": "Describe what the robot sees. Include visible evidence, uncertainty, safety concerns, and the next useful robot action.",
-        "context": "Live Blacknode USB camera frame",
-        "robot_task": "understand the workspace before acting",
-        "include_safety_checks": true
-      },
-      "pos": [1120, 360],
-      "inputs": ["image", "question", "context", "robot_task", "include_safety_checks"],
-      "outputs": ["prompt", "summary"],
-      "input_types": {
-        "image": "Image",
-        "question": "Text",
-        "context": "Text",
-        "robot_task": "Text",
-        "include_safety_checks": "Bool"
-      },
-      "output_types": {"prompt": "Text", "summary": "Dict"},
-      "input_defaults": {
-        "question": "Describe what the robot sees. Include visible evidence, uncertainty, safety concerns, and the next useful robot action.",
-        "context": "Live Blacknode USB camera frame",
-        "robot_task": "understand the workspace before acting",
-        "include_safety_checks": true
-      }
-    },
-    "vlm": {
-      "id": "vlm",
-      "type": "VLM",
-      "params": {
+        "action": "start",
+        "stream_id": "vision_reasoning",
+        "prompt": "Describe what the robot sees. Include visible evidence, uncertainty, safety concerns (obstacles, people, cables, glass, liquids, unstable objects), and the next useful robot action.",
+        "system": "You are a robot vision assistant. Describe only visible evidence from the image, then give a concise next action.",
         "provider": "ollama",
         "model": "qwen3-vl:4b",
         "endpoint_url": "http://127.0.0.1:11434",
-        "api_key": "",
-        "max_tokens": 700,
         "temperature": 0.2,
-        "allow_text_only": false
+        "max_tokens": 4096,
+        "interval_seconds": 8.0,
+        "host": "127.0.0.1",
+        "port": 0,
+        "max_fps": 2.0,
+        "max_width": 960,
+        "title": "Live Reasoning"
       },
-      "pos": [1490, 360],
-      "inputs": ["image", "question", "system", "provider", "model", "endpoint_url", "api_key", "max_tokens", "temperature", "allow_text_only"],
-      "outputs": ["text", "report", "raw"],
+      "pos": [1120, 160],
+      "inputs": ["trigger", "action", "stream_id", "image_url", "detection_url", "prompt", "system", "provider", "model", "endpoint_url", "api_key", "temperature", "max_tokens", "interval_seconds", "host", "port", "max_fps", "max_width", "title"],
+      "outputs": ["dashboard", "streaming", "stream_url", "snapshot_url", "state_url", "stream_id", "report"],
       "input_types": {
-        "image": "Image",
-        "question": "Text",
+        "trigger": "Any",
+        "action": "Text",
+        "stream_id": "Text",
+        "image_url": "Text",
+        "detection_url": "Text",
+        "prompt": "Text",
         "system": "Text",
         "provider": "Text",
         "model": "Text",
         "endpoint_url": "Text",
         "api_key": "Text",
-        "max_tokens": "Int",
         "temperature": "Float",
-        "allow_text_only": "Bool"
+        "max_tokens": "Int",
+        "interval_seconds": "Float",
+        "host": "Text",
+        "port": "Int",
+        "max_fps": "Float",
+        "max_width": "Int",
+        "title": "Text"
       },
-      "output_types": {"text": "Text", "report": "Text", "raw": "Dict"},
+      "output_types": {
+        "dashboard": "Image",
+        "streaming": "Bool",
+        "stream_url": "Text",
+        "snapshot_url": "Text",
+        "state_url": "Text",
+        "stream_id": "Text",
+        "report": "Text"
+      },
       "input_defaults": {
-        "question": "What do you see?",
-        "system": "You are a precise robot vision assistant. Do not invent details. Return visible observations, supporting evidence, uncertainty, safety notes, and one next action.",
+        "action": "start",
+        "stream_id": "vision_reasoning",
+        "prompt": "Describe what the robot sees. Include visible evidence, uncertainty, safety concerns (obstacles, people, cables, glass, liquids, unstable objects), and the next useful robot action.",
+        "system": "You are a robot vision assistant. Describe only visible evidence from the image, then give a concise next action.",
         "provider": "ollama",
         "model": "qwen3-vl:4b",
         "endpoint_url": "http://127.0.0.1:11434",
-        "api_key": "",
-        "max_tokens": 700,
         "temperature": 0.2,
-        "allow_text_only": false
+        "max_tokens": 4096,
+        "interval_seconds": 8.0,
+        "host": "127.0.0.1",
+        "port": 0,
+        "max_fps": 2.0,
+        "max_width": 960,
+        "title": "Live Reasoning"
       },
-      "input_choices": {"provider": ["openai-compatible", "anthropic", "ollama", "auto"]}
-    },
-    "reasoning": {
-      "id": "reasoning",
-      "type": "ReasoningDashboard",
-      "params": {"title": "Blacknode Vision Reasoning"},
-      "pos": [1880, 250],
-      "inputs": ["image", "answer", "prompt", "report", "title"],
-      "outputs": ["dashboard", "ready", "summary"],
-      "input_types": {
-        "image": "Image",
-        "answer": "Text",
-        "prompt": "Text",
-        "report": "Text",
-        "title": "Text"
-      },
-      "output_types": {"dashboard": "Image", "ready": "Bool", "summary": "Dict"},
-      "input_defaults": {"title": "Blacknode Vision Reasoning"}
+      "input_choices": {"provider": ["ollama", "nvidia"]}
     },
     "stream_out": {
       "id": "stream_out",
       "type": "OutputImage",
       "params": {},
-      "pos": [1120, 40],
+      "pos": [790, 40],
       "inputs": ["image"],
       "outputs": ["image"],
       "input_types": {"image": "Image"},
       "output_types": {"image": "Image"},
-      "input_defaults": {}
-    },
-    "reasoning_out": {
-      "id": "reasoning_out",
-      "type": "OutputImage",
-      "params": {},
-      "pos": [2280, 250],
-      "inputs": ["image"],
-      "outputs": ["image"],
-      "input_types": {"image": "Image"},
-      "output_types": {"image": "Image"},
-      "input_defaults": {}
-    },
-    "answer_out": {
-      "id": "answer_out",
-      "type": "Output",
-      "params": {"label": "VLM visible reasoning"},
-      "pos": [2280, 620],
-      "inputs": ["value"],
-      "outputs": [],
-      "input_types": {"value": "Any"},
-      "output_types": {},
-      "input_defaults": {}
-    },
-    "report_out": {
-      "id": "report_out",
-      "type": "Output",
-      "params": {"label": "VLM report"},
-      "pos": [2280, 820],
-      "inputs": ["value"],
-      "outputs": [],
-      "input_types": {"value": "Any"},
-      "output_types": {},
       "input_defaults": {}
     }
   },
   "edges": [
     {"from": "stream", "from_port": "preview", "to": "stream_out", "to_port": "image"},
-    {"from": "stream", "from_port": "snapshot_url", "to": "prompt", "to_port": "image"},
-    {"from": "stream", "from_port": "snapshot_url", "to": "vlm", "to_port": "image"},
-    {"from": "stream", "from_port": "snapshot_url", "to": "reasoning", "to_port": "image"},
-    {"from": "prompt", "from_port": "prompt", "to": "vlm", "to_port": "question"},
-    {"from": "prompt", "from_port": "prompt", "to": "reasoning", "to_port": "prompt"},
-    {"from": "vlm", "from_port": "text", "to": "reasoning", "to_port": "answer"},
-    {"from": "vlm", "from_port": "text", "to": "answer_out", "to_port": "value"},
-    {"from": "vlm", "from_port": "report", "to": "reasoning", "to_port": "report"},
-    {"from": "vlm", "from_port": "report", "to": "report_out", "to_port": "value"},
-    {"from": "reasoning", "from_port": "dashboard", "to": "reasoning_out", "to_port": "image"}
+    {"from": "stream", "from_port": "snapshot_url", "to": "reasoning", "to_port": "image_url"}
   ]
 }

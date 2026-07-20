@@ -607,7 +607,7 @@ def _svg_multiline_text(lines: list[str], *, x: int, y: int, fill: str, size: in
         "answer": Text(default=""),
         "prompt": Text(default=""),
         "report": Text(default=""),
-        "title": Text(default="Blacknode Vision Reasoning"),
+        "title": Text(default="Reasoning"),
     },
     outputs={"dashboard": Image, "ready": Bool, "summary": Dict},
 )
@@ -616,7 +616,7 @@ def vision_reasoning_dashboard(ctx: dict) -> dict:
     answer = str(ctx.get("answer") or "").strip()
     prompt = str(ctx.get("prompt") or "").strip()
     report = str(ctx.get("report") or "").strip()
-    title = str(ctx.get("title") or "Blacknode Vision Reasoning").strip()
+    title = str(ctx.get("title") or "Reasoning").strip()
     image_kind = _image_kind(image)
     image_data_url, image_error = _image_data_url(image)
     ready = bool(answer) and "FAILED" not in report.upper()
@@ -697,10 +697,10 @@ def vision_reasoning_dashboard(ctx: dict) -> dict:
         "port": Int(default=0),
         "max_fps": Float(default=2.0),
         "max_width": Int(default=960),
-        "title": Text(default="Blacknode Live Vision Reasoning"),
+        "title": Text(default="Live Reasoning"),
     },
     outputs={
-        "preview": Image,
+        "dashboard": Image,
         "streaming": Bool,
         "stream_url": Text,
         "snapshot_url": Text,
@@ -713,7 +713,7 @@ def vision_reasoning_stream(ctx: dict) -> dict:
     stream_id = str(ctx.get("stream_id") or "vision_reasoning").strip() or "vision_reasoning"
     action = str(ctx.get("action") or "start").strip().lower()
     empty = {
-        "preview": "",
+        "dashboard": "",
         "streaming": False,
         "stream_url": "",
         "snapshot_url": "",
@@ -759,7 +759,7 @@ def vision_reasoning_stream(ctx: dict) -> dict:
         port=max(0, int(ctx.get("port") or 0)),
         max_fps=max(0.1, min(10.0, float(ctx.get("max_fps") or 2.0))),
         max_width=max(0, int(ctx.get("max_width") or 960)),
-        title=str(ctx.get("title") or "Blacknode Live Vision Reasoning").strip() or "Blacknode Live Vision Reasoning",
+        title=str(ctx.get("title") or "Live Reasoning").strip() or "Live Reasoning",
     )
     if not result.get("ok"):
         return {**empty, "report": f"reasoning stream FAILED: {result.get('error', 'unknown error')}"}
@@ -769,7 +769,7 @@ def vision_reasoning_stream(ctx: dict) -> dict:
     state_url = str(result.get("state_url") or "")
     model_label = model if model.lower().startswith(f"{provider.lower()}/") else f"{provider}/{model}"
     return {
-        "preview": stream_url,
+        "dashboard": stream_url,
         "streaming": True,
         "stream_url": stream_url,
         "snapshot_url": snapshot_url,

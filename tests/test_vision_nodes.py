@@ -737,7 +737,7 @@ def test_vision_reasoning_stream_starts_runtime(monkeypatch):
         "max_tokens": 512,
     })
     assert result["streaming"] is True
-    assert result["preview"] == "http://127.0.0.1:9200/dashboard.mjpg"
+    assert result["dashboard"] == "http://127.0.0.1:9200/dashboard.mjpg"
     assert result["state_url"] == "http://127.0.0.1:9200/state.json"
     assert calls[0]["image_url"] == "http://127.0.0.1:9000/snapshot.jpg"
     assert calls[0]["detection_url"] == ""
