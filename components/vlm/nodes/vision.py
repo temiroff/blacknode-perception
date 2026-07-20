@@ -143,6 +143,11 @@ def _read_url_bytes(url: str) -> tuple[bytes, str]:
     req = urllib.request.Request(url, headers={"User-Agent": "BlacknodeVision/0.1"})
     with urllib.request.urlopen(req, timeout=30) as response:
         media_type = response.headers.get_content_type() or "image/jpeg"
+        if media_type.startswith("multipart/"):
+            raise ValueError(
+                f"{url} is a live MJPEG stream ({media_type}), not a single frame, "
+                "and would never finish downloading. Use the stream's snapshot_url instead."
+            )
         return response.read(), media_type
 
 
@@ -210,6 +215,16 @@ def _format_http_error(exc: urllib.error.HTTPError, limit: int = 300) -> str:
     if message:
         return f"HTTP {exc.code}: {_clip(message, limit)}"
     return f"HTTP {exc.code}: {_clip(raw, limit)}"
+
+
+def _format_connection_error(exc: urllib.error.URLError, provider: str, endpoint: str, model: str) -> str:
+    if provider == "ollama":
+        return (
+            f"could not reach Ollama at {endpoint} ({exc.reason}). "
+            f"Install it from https://ollama.com, run `ollama pull {model}`, "
+            "and make sure `ollama serve` is running, or switch the provider input."
+        )
+    return f"could not reach {endpoint} ({exc.reason})"
 
 
 @node(
@@ -559,6 +574,8 @@ def vision_vlm_describe(ctx: dict) -> dict:
         payload = _post_json(endpoint + "/chat/completions", body, headers)
     except urllib.error.HTTPError as exc:
         return {"text": "", "report": f"VLM describe FAILED: {_format_http_error(exc)}", "raw": {}}
+    except urllib.error.URLError as exc:
+        return {"text": "", "report": f"VLM describe FAILED: {_format_connection_error(exc, provider, endpoint, model)}", "raw": {}}
     except Exception as exc:  # noqa: BLE001
         return {"text": "", "report": f"VLM describe FAILED: {type(exc).__name__}: {exc}", "raw": {}}
 

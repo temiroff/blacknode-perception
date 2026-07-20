@@ -2,6 +2,7 @@
 import base64
 import importlib.util
 import json
+import urllib.error
 from pathlib import Path
 
 import numpy as np
@@ -464,6 +465,26 @@ def test_vlm_describe_ollama_text_only(monkeypatch):
     assert "images" not in calls[0]["body"]["messages"][-1]
 
 
+def test_vlm_describe_ollama_unreachable_suggests_install(monkeypatch):
+    fn = _NODE_REGISTRY["VLM"]
+
+    def fake_post_json(url, body, headers, timeout=90.0):
+        raise urllib.error.URLError(ConnectionRefusedError("[WinError 10061] refused"))
+
+    monkeypatch.setitem(fn.__globals__, "_post_json", fake_post_json)
+    result = fn({
+        "image": "",
+        "question": "What next?",
+        "provider": "ollama",
+        "endpoint_url": "http://127.0.0.1:11434",
+        "allow_text_only": True,
+    })
+    assert result["text"] == ""
+    assert "could not reach Ollama at http://127.0.0.1:11434" in result["report"]
+    assert "https://ollama.com" in result["report"]
+    assert "ollama pull" in result["report"]
+
+
 def test_vlm_describe_ollama_empty_content_reports_failure(monkeypatch):
     calls = []
 
@@ -511,6 +532,38 @@ def test_vlm_describe_ollama_retries_qwen3_length_stop(monkeypatch):
     assert result["text"] == "Cube centered at (320, 240)."
     assert "length retry" in result["report"]
     assert [call["body"]["options"]["num_predict"] for call in calls] == [4096, 8192]
+
+
+def test_vlm_describe_rejects_mjpeg_stream_url_instead_of_hanging(monkeypatch):
+    fn = _NODE_REGISTRY["VLM"]
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            return False
+
+        def read(self):
+            raise AssertionError("must not attempt to read an infinite multipart stream")
+
+        @property
+        def headers(self):
+            class Headers:
+                def get_content_type(self_inner):
+                    return "multipart/x-mixed-replace"
+            return Headers()
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: FakeResponse())
+    result = fn({
+        "image": "http://127.0.0.1:9000/stream.mjpg",
+        "question": "test",
+        "provider": "ollama",
+        "allow_text_only": False,
+    })
+    assert result["text"] == ""
+    assert "live MJPEG stream" in result["report"]
+    assert "snapshot_url" in result["report"]
 
 
 def test_vlm_describe_anthropic_image(monkeypatch):
