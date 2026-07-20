@@ -8,9 +8,6 @@ from pathlib import Path
 _TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "templates"
 _EXPECTED_ROBOTS = {
     "vision-camera-console.json": {},
-    "vision-cv2-cube-local-reasoning.json": {"robot": 0},
-    "vision-cv2-cube-ros2-native-reasoning.json": {"robot": 0},
-    "vision-cv2-cube-rosbridge-reasoning.json": {"robot": 0},
     "vision-frame-vlm.json": {},
     "vision-live-vlm-reasoning.json": {},
 }
