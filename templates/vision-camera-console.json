@@ -4,8 +4,8 @@
   "name": "Camera Console",
   "saved_at": "2026-07-10T00:00:00",
   "entrypoint": {
-    "node_id": "status",
-    "port": "dashboard"
+    "node_id": "image_out",
+    "port": "image"
   },
   "metadata": {
     "template": true,
@@ -95,9 +95,21 @@
       },
       "output_types": {"dashboard": "Image", "ready": "Bool", "report": "Text"},
       "input_defaults": {"camera_topic": "local camera 0"}
+    },
+    "image_out": {
+      "id": "image_out",
+      "type": "OutputImage",
+      "params": {},
+      "pos": [1120, 360],
+      "inputs": ["image"],
+      "outputs": ["image"],
+      "input_types": {"image": "Image"},
+      "output_types": {"image": "Image"},
+      "input_defaults": {}
     }
   },
   "edges": [
+    {"from": "stream", "from_port": "preview", "to": "image_out", "to_port": "image"},
     {"from": "stream", "from_port": "stream_url", "to": "status", "to_port": "stream_url"},
     {"from": "stream", "from_port": "streaming", "to": "status", "to_port": "streaming"},
     {"from": "stream", "from_port": "report", "to": "status", "to_port": "stream_report"}

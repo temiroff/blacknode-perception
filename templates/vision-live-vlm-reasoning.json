@@ -175,17 +175,6 @@
       "output_types": {"image": "Image"},
       "input_defaults": {}
     },
-    "snapshot_out": {
-      "id": "snapshot_out",
-      "type": "OutputImage",
-      "params": {},
-      "pos": [1120, 650],
-      "inputs": ["image"],
-      "outputs": ["image"],
-      "input_types": {"image": "Image"},
-      "output_types": {"image": "Image"},
-      "input_defaults": {}
-    },
     "reasoning_out": {
       "id": "reasoning_out",
       "type": "OutputImage",
@@ -224,7 +213,6 @@
     {"from": "stream", "from_port": "preview", "to": "stream_out", "to_port": "image"},
     {"from": "stream", "from_port": "preview", "to": "prompt", "to_port": "image"},
     {"from": "stream", "from_port": "preview", "to": "vlm", "to_port": "image"},
-    {"from": "stream", "from_port": "preview", "to": "snapshot_out", "to_port": "image"},
     {"from": "stream", "from_port": "preview", "to": "reasoning", "to_port": "image"},
     {"from": "prompt", "from_port": "prompt", "to": "vlm", "to_port": "question"},
     {"from": "prompt", "from_port": "prompt", "to": "reasoning", "to_port": "prompt"},
