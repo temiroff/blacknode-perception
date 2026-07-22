@@ -12,6 +12,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from blacknode.process import terminate_tree
+
 _STREAMS: dict[str, dict[str, Any]] = {}
 _CAMERA_STREAMS: dict[str, dict[str, Any]] = {}
 _REASONING_STREAMS: dict[str, dict[str, Any]] = {}
@@ -72,22 +74,10 @@ def _bool_value(value: Any, default: bool = False) -> bool:
 
 
 def _terminate_process(proc: subprocess.Popen) -> bool:
-    if proc.poll() is not None:
-        return False
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return False
-    except Exception:
-        proc.terminate()
-    try:
-        proc.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except Exception:
-            proc.kill()
-    return True
+    # Delegates so stopping works the same on every platform: os.killpg does not
+    # exist on Windows, where the fallback killed only the launcher and left the
+    # interpreter holding the camera device.
+    return terminate_tree(proc)
 
 
 def start_color_stream(
