@@ -61,7 +61,7 @@ def _resolve_image_message_type(topic: str, requested: str) -> tuple[str, str]:
 
 
 @node(
-    name="ROS2ImageStream",
+    name="CameraROS2Subscribe",
     live=True,
     category=_CATEGORY,
     description="Live camera feed for a raw or compressed ROS 2 image topic. Go Live streams continuous MJPEG; a plain one-shot Run captures a single frame instead.",
@@ -187,7 +187,7 @@ def ros2_image_stream(ctx: dict) -> dict:
 
 
 @node(
-    name="ROS2USBCamera",
+    name="CameraROS2Publish",
     live=True,
     category=_CATEGORY,
     description=(
@@ -345,7 +345,7 @@ def _web_video_url(host: str, port: int, topic: str, quality: int, width: int, h
 
 
 @node(
-    name="ROS2WebVideoStream",
+    name="CameraROS2Http",
     live=True,
     category=_CATEGORY,
     description=(

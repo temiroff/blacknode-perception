@@ -34,7 +34,7 @@ templates = ["components/camera/adapters/ros2/templates"]
 # Colcon sources the adapter ships; build before ROS 2 nodes can run them.
 ros2-workspaces = ["components/camera/adapters/ros2/ros2_ws"]
 node-types = [
-  "ROS2ImageStream", "ROS2USBCamera", "ROS2WebVideoStream"
+  "CameraROS2Subscribe", "CameraROS2Publish", "CameraROS2Http"
 ]
 
 [components.camera.adapters.ros2.dependencies]

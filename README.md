@@ -12,7 +12,7 @@ topics, processes, and transports, while `blacknode-perception` owns the
 camera capability itself — direct local cameras, OpenCV tracking, frame
 prompts, dashboards, optional VLM/LLM inspection, and the **`camera/ros2`
 adapter** that puts the camera capability on a ROS 2 graph
-(`ROS2ImageStream`, `ROS2USBCamera`, `ROS2WebVideoStream`, plus the bundled
+(`CameraROS2Subscribe`, `CameraROS2Publish`, `CameraROS2Http`, plus the bundled
 `perception_camera` colcon package under `components/camera/adapters/ros2/ros2_ws/`).
 
 The adapter declares a versioned dependency on `blacknode-ros2/core`;

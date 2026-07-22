@@ -16,7 +16,7 @@
   "node_meta": {
     "camera": {
       "id": "camera",
-      "type": "ROS2USBCamera",
+      "type": "CameraROS2Publish",
       "params": {
         "action": "start",
         "selection": 0,

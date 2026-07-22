@@ -23,7 +23,7 @@ _tag_new_package_nodes(_before, "blacknode-perception", _ADAPTER_NODES, "camera"
 from blacknode.pkg.blacknode_perception.camera.adapters.ros2 import camera_stream as cam
 from blacknode.pkg.blacknode_ros2 import ros2_runtime as rt
 
-NEW_NODES = ["ROS2ImageStream", "ROS2USBCamera", "ROS2WebVideoStream"]
+NEW_NODES = ["CameraROS2Subscribe", "CameraROS2Publish", "CameraROS2Http"]
 
 
 def test_new_nodes_registered_with_category_and_package():
@@ -36,14 +36,14 @@ def test_new_nodes_registered_with_category_and_package():
 def test_no_backend_is_structured_error(monkeypatch):
     monkeypatch.setattr(rt, "detect_backend", lambda refresh=False: {"backend": "none", "detail": "x"})
 
-    result = _NODE_REGISTRY["ROS2ImageStream"]({"topic": "/camera/image_raw", "message_type": "raw"})
+    result = _NODE_REGISTRY["CameraROS2Subscribe"]({"topic": "/camera/image_raw", "message_type": "raw"})
 
     assert result["preview"] == ""
     assert result["streaming"] is False
     assert "FAILED" in result["report"]
 
 
-# --- ROS2ImageStream --------------------------------------------------------------
+# --- CameraROS2Subscribe --------------------------------------------------------------
 
 def test_image_stream_starts_with_auto_raw_topic(monkeypatch):
     calls = {}
@@ -65,7 +65,7 @@ def test_image_stream_starts_with_auto_raw_topic(monkeypatch):
 
     monkeypatch.setattr(rt, "run_ros2", fake_run)
     monkeypatch.setattr(rt, "start_image_stream", fake_start)
-    result = _NODE_REGISTRY["ROS2ImageStream"]({
+    result = _NODE_REGISTRY["CameraROS2Subscribe"]({
         "topic": "/camera/image_raw",
         "message_type": "auto",
         "stream_id": "cam",
@@ -95,7 +95,7 @@ def test_image_stream_auto_detects_compressed_topic(monkeypatch):
         "stream_url": "http://127.0.0.1:9011/stream.mjpg",
         "snapshot_url": "http://127.0.0.1:9011/snapshot.jpg",
     })
-    result = _NODE_REGISTRY["ROS2ImageStream"]({"topic": "/camera/compressed", "message_type": "auto"})
+    result = _NODE_REGISTRY["CameraROS2Subscribe"]({"topic": "/camera/compressed", "message_type": "auto"})
     assert result["preview"].endswith("/stream.mjpg")
     assert result["streaming"] is True
     assert "compressed" in result["report"]
@@ -119,7 +119,7 @@ def test_image_stream_run_once_returns_a_single_frame(monkeypatch):
 
     monkeypatch.setattr(rt, "capture_image_snapshot", fake_capture)
 
-    result = _NODE_REGISTRY["ROS2ImageStream"]({
+    result = _NODE_REGISTRY["CameraROS2Subscribe"]({
         "topic": "/camera/image_raw",
         "message_type": "auto",
         "__run_mode__": "once",
@@ -145,7 +145,7 @@ def test_image_stream_live_mode_still_starts_a_stream(monkeypatch):
         "snapshot_url": "http://127.0.0.1:9012/snapshot.jpg",
     })
 
-    result = _NODE_REGISTRY["ROS2ImageStream"]({
+    result = _NODE_REGISTRY["CameraROS2Subscribe"]({
         "topic": "/camera/image_raw",
         "message_type": "auto",
         "__run_mode__": "live",
@@ -164,7 +164,7 @@ def test_image_stream_stop_calls_runtime(monkeypatch):
         return {"ok": True, "stopped": 1}
 
     monkeypatch.setattr(rt, "stop_image_stream", fake_stop)
-    result = _NODE_REGISTRY["ROS2ImageStream"]({"action": "stop", "stream_id": "cam"})
+    result = _NODE_REGISTRY["CameraROS2Subscribe"]({"action": "stop", "stream_id": "cam"})
     assert captured["stream_id"] == "cam"
     assert result["preview"] == ""
     assert result["streaming"] is False
@@ -179,13 +179,13 @@ def test_image_stream_explains_a_topic_with_no_publisher(monkeypatch):
 
     monkeypatch.setattr(rt, "run_ros2", fake_run)
 
-    result = _NODE_REGISTRY["ROS2ImageStream"]({"topic": "/camera/image_raw", "message_type": "auto"})
+    result = _NODE_REGISTRY["CameraROS2Subscribe"]({"topic": "/camera/image_raw", "message_type": "auto"})
 
     assert result["streaming"] is False
     assert "no active publisher" in result["report"]
 
 
-# --- ROS2USBCamera ----------------------------------------------------------------
+# --- CameraROS2Publish ----------------------------------------------------------------
 
 def test_usb_camera_binds_all_interfaces_so_the_ros_container_can_reach_it(monkeypatch):
     # The capture must bind 0.0.0.0: on the Docker backend 127.0.0.1 would be
@@ -210,7 +210,7 @@ def test_usb_camera_binds_all_interfaces_so_the_ros_container_can_reach_it(monke
         "snapshot_url": "", "health_url": "",
     })
 
-    result = _NODE_REGISTRY["ROS2USBCamera"]({"action": "start", "selection": 0})
+    result = _NODE_REGISTRY["CameraROS2Publish"]({"action": "start", "selection": 0})
 
     assert seen["host"] == "0.0.0.0"
     assert result["streaming"] is True
@@ -226,17 +226,17 @@ def test_usb_camera_explains_a_camera_that_will_not_open(monkeypatch):
     monkeypatch.setattr(cam, "_NODE_REGISTRY", _NODE_REGISTRY)
     monkeypatch.setattr(rt, "start_host_camera_publisher", lambda **k: pytest.fail("must not bridge a dead camera"))
 
-    result = _NODE_REGISTRY["ROS2USBCamera"]({"action": "start", "selection": 0})
+    result = _NODE_REGISTRY["CameraROS2Publish"]({"action": "start", "selection": 0})
 
     assert result["streaming"] is False
     assert "already in use" in result["report"]
     assert "selection" in result["report"]
 
 
-# --- ROS2WebVideoStream -----------------------------------------------------------
+# --- CameraROS2Http -----------------------------------------------------------
 
 def test_web_video_stream_refuses_the_placeholder_host():
-    result = _NODE_REGISTRY["ROS2WebVideoStream"]({"host": "ROBOT_IP", "topic": "/camera/image_raw"})
+    result = _NODE_REGISTRY["CameraROS2Http"]({"host": "ROBOT_IP", "topic": "/camera/image_raw"})
 
     assert result["streaming"] is False
     assert result["preview"] == ""
@@ -252,7 +252,7 @@ def test_web_video_stream_builds_url_and_reports_live(monkeypatch):
 
     monkeypatch.setattr(rt, "probe_web_video", fake_probe)
 
-    result = _NODE_REGISTRY["ROS2WebVideoStream"]({
+    result = _NODE_REGISTRY["CameraROS2Http"]({
         "host": "192.168.1.50",
         "port": 8080,
         "topic": "/depth_cam/rgb0/image_raw",
@@ -270,7 +270,7 @@ def test_web_video_stream_builds_url_and_reports_live(monkeypatch):
 def test_web_video_stream_explains_an_unreachable_robot(monkeypatch):
     monkeypatch.setattr(rt, "probe_web_video", lambda url, timeout: (False, "cannot reach the robot"))
 
-    result = _NODE_REGISTRY["ROS2WebVideoStream"]({"host": "192.168.1.50", "topic": "/camera/image_raw"})
+    result = _NODE_REGISTRY["CameraROS2Http"]({"host": "192.168.1.50", "topic": "/camera/image_raw"})
 
     assert result["streaming"] is False
     assert result["preview"] == ""
