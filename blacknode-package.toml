@@ -18,8 +18,7 @@ capabilities = ["perception.camera", "perception.calibration", "perception.track
 nodes = ["components/camera/nodes"]
 module-root = true
 node-types = [
-  "Camera", "CameraCalibration", "CameraDiscovery", "CameraSelect", "CameraStream", "CV2ColorObjectStream",
-  "CV2ColorObjectTracker", "CV2ColorTargetHint", "CV2HSVMask",
+  "Camera", "CameraCalibration", "CameraDiscovery", "CameraSelect", "CameraStream",
 ]
 
 [components.camera.dependencies]
@@ -73,9 +72,18 @@ default = false
 capabilities = ["perception.detection"]
 
 [components.tracking]
-description = "Multi-object identity and target tracking contracts."
-default = false
-capabilities = ["perception.tracking"]
+description = "Deterministic OpenCV colour-object tracking and target hints."
+default = true
+capabilities = ["perception.tracking", "perception.tracking.color"]
+nodes = ["components/tracking/nodes"]
+node-types = [
+  "CV2ColorObjectStream", "CV2ColorObjectTracker", "CV2ColorTargetHint", "CV2HSVMask",
+]
+
+[components.tracking.dependencies]
+pip = ["opencv-python>=4.8", "numpy>=1.24"]
+imports = ["cv2", "numpy"]
+requires = [{ package = "blacknode-perception", component = "camera", version = ">=0.2.0,<1.0.0" }]
 
 [components.slam]
 description = "Mapping and SLAM lifecycle contracts."
