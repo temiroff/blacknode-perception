@@ -187,18 +187,12 @@ def test_image_stream_explains_a_topic_with_no_publisher(monkeypatch):
 
 # --- CameraROS2Publish ----------------------------------------------------------------
 
-def test_usb_camera_binds_all_interfaces_so_the_ros_container_can_reach_it(monkeypatch):
-    # The capture must bind 0.0.0.0: on the Docker backend 127.0.0.1 would be
-    # the container itself and the bridge would never see a frame.
-    seen = {}
-
-    def fake_camera(ctx):
-        seen.update(ctx)
-        return {"streaming": True, "label": "USB Cam", "stream_url": "http://127.0.0.1:5000/stream.mjpg"}
-
-    monkeypatch.setitem(_NODE_REGISTRY, "Camera", fake_camera)
-    monkeypatch.setattr(cam, "_NODE_REGISTRY", _NODE_REGISTRY)
-    monkeypatch.setattr(rt, "start_host_camera_publisher", lambda **k: {"ok": True, "backend": "docker"})
+def test_publish_bridges_the_wired_stream_and_reads_it_back_out_of_ros(monkeypatch):
+    # Capture belongs to whatever is wired in; this node only publishes it and
+    # proves the topic carries it by showing the picture read back from ROS.
+    bridged = {}
+    monkeypatch.setattr(rt, "start_host_camera_publisher",
+                        lambda **k: bridged.update(k) or {"ok": True, "backend": "docker"})
 
     def fake_run(args, timeout=15.0):
         stdout = "sensor_msgs/msg/Image\n" if args[:2] == ["topic", "type"] else "/camera/image_raw\n"
@@ -210,27 +204,27 @@ def test_usb_camera_binds_all_interfaces_so_the_ros_container_can_reach_it(monke
         "snapshot_url": "", "health_url": "",
     })
 
-    result = _NODE_REGISTRY["CameraROS2Publish"]({"action": "start", "selection": 0})
+    result = _NODE_REGISTRY["CameraROS2Publish"]({
+        "action": "start",
+        "frame_stream": {"stream_url": "http://127.0.0.1:5000/stream.mjpg", "label": "USB Cam"},
+    })
 
-    assert seen["host"] == "0.0.0.0"
+    assert bridged["source_url"] == "http://127.0.0.1:5000/stream.mjpg"
     assert result["streaming"] is True
     assert result["camera"] == "USB Cam"
-    # the picture must come back out of ROS, not straight from the capture
+    # the picture must come back out of ROS, not straight from the wired stream
     assert result["preview"] == "http://127.0.0.1:39000/stream.mjpg"
 
 
-def test_usb_camera_explains_a_camera_that_will_not_open(monkeypatch):
-    monkeypatch.setitem(_NODE_REGISTRY, "Camera", lambda ctx: {
-        "streaming": False, "label": "USB Cam", "report": "camera '0' did not produce a frame",
-    })
-    monkeypatch.setattr(cam, "_NODE_REGISTRY", _NODE_REGISTRY)
-    monkeypatch.setattr(rt, "start_host_camera_publisher", lambda **k: pytest.fail("must not bridge a dead camera"))
+def test_publish_explains_an_unwired_frame_stream(monkeypatch):
+    monkeypatch.setattr(rt, "start_host_camera_publisher",
+                        lambda **k: pytest.fail("must not bridge without a source"))
 
-    result = _NODE_REGISTRY["CameraROS2Publish"]({"action": "start", "selection": 0})
+    result = _NODE_REGISTRY["CameraROS2Publish"]({"action": "start"})
 
     assert result["streaming"] is False
-    assert "already in use" in result["report"]
-    assert "selection" in result["report"]
+    assert "frame_stream" in result["report"]
+    assert "Camera" in result["report"]
 
 
 # --- CameraROS2Http -----------------------------------------------------------

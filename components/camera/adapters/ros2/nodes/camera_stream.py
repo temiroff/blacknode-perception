@@ -12,7 +12,7 @@ import time
 import urllib.parse
 
 from blacknode.node import Any as AnyPort
-from blacknode.node import Bool, Enum, Float, Image, Int, Text, _NODE_REGISTRY, node
+from blacknode.node import Bool, Dict, Enum, Float, Image, Int, Text, node
 
 
 class _LazyRos2Runtime:
@@ -191,14 +191,15 @@ def ros2_image_stream(ctx: dict) -> dict:
     live=True,
     category=_CATEGORY,
     description=(
-        "Plug-and-play USB camera on ROS 2: opens a USB camera, publishes it as a real "
-        "sensor_msgs/Image topic, and shows the picture read back from ROS. No IP, no wiring, "
-        "no camera driver to install."
+        "Publish any camera stream onto a ROS 2 sensor_msgs/Image topic, and show the picture "
+        "read back from ROS as proof the topic carries it. Wire a Camera (or any node emitting "
+        "a frame stream) into frame_stream."
     ),
+    primary_inputs=["frame_stream"],
     inputs={
         "trigger": AnyPort,
         "action": Enum(["start", "stop"], default="start"),
-        "selection": Int(default=0),
+        "frame_stream": Dict(default={}),
         "topic": Text(default="/camera/image_raw"),
         "max_fps": Float(default=15.0),
         "max_width": Int(default=640),
@@ -215,50 +216,32 @@ def ros2_image_stream(ctx: dict) -> dict:
     },
 )
 def ros2_usb_camera(ctx: dict) -> dict:
-    """Own the whole USB-camera-to-ROS path so a template needs no setup.
+    """Bridge an already-running camera stream onto a ROS 2 image topic.
 
-    Docker cannot open a USB camera (the helper container has no /dev/video*),
-    so the capture happens on this machine and is bridged into the ROS graph.
-    The preview deliberately comes back out of ROS rather than from the capture
-    directly, so what is shown is proof the topic really carries the camera.
+    Capture is somebody else's job: wire a Camera (or any node that emits a
+    frame stream) into frame_stream. This node only publishes it and reads it
+    back, so the preview proves the topic really carries the frames.
+
+    Docker cannot open a USB camera, so capture always happens on this machine
+    and only the MJPEG URL crosses into the ROS graph.
     """
     topic = str(ctx.get("topic") or "/camera/image_raw").strip() or "/camera/image_raw"
     stream_id = "ros2_usb_camera"
     blank = {"preview": "", "streaming": False, "topic": topic, "camera": "", "stream_url": ""}
 
-    camera_node = _NODE_REGISTRY.get("Camera")
-    if camera_node is None:
-        return {**blank, "report": (
-            "USB camera FAILED: the Camera capture node is not installed. "
-            "Enable the blacknode-perception camera component, then run this again."
-        )}
-
     if str(ctx.get("action") or "start").strip().lower() == "stop":
-        camera_node({"action": "stop", "stream_id": stream_id})
         rt.stop_host_camera_publisher(stream_id)
         rt.stop_image_stream(stream_id)
-        return {**blank, "report": "stopped the USB camera, its ROS publisher, and the preview"}
+        return {**blank, "report": "stopped the ROS publisher and the preview"}
 
-    # 1. open the USB camera here and serve it where the ROS side can read it.
-    #    0.0.0.0 matters: on the Docker backend 127.0.0.1 would be the container.
-    capture = camera_node({
-        "action": "start",
-        "selection": int(ctx.get("selection") or 0),
-        "stream_id": stream_id,
-        "host": "0.0.0.0",
-        "port": 0,
-        "max_fps": max(0.1, float(ctx.get("max_fps") or 15.0)),
-        "max_width": max(0, int(ctx.get("max_width") or 640)),
-        "jpeg_quality": max(1, min(100, int(ctx.get("jpeg_quality") or 80))),
-    })
-    label = str(capture.get("label") or "")
-    source_url = str(capture.get("stream_url") or "")
-    if not capture.get("streaming") or not source_url:
-        return {**blank, "camera": label, "report": (
-            f"USB camera FAILED: {capture.get('report') or 'the camera did not start'}\n"
-            "CHECK: is the camera plugged in, not already in use by another app "
-            "(Teams/Zoom/OBS, or another Blacknode camera node), and allowed under "
-            "Windows camera privacy settings? Try a different 'selection' number."
+    frame_stream = ctx.get("frame_stream") if isinstance(ctx.get("frame_stream"), dict) else {}
+    source_url = str(frame_stream.get("stream_url") or "")
+    label = str(frame_stream.get("label") or frame_stream.get("stream_id") or "camera")
+    if not source_url:
+        return {**blank, "report": (
+            "publish FAILED: nothing wired to 'frame_stream'.\n"
+            "CHECK: connect a Camera node's frame_stream output to this input and cook it "
+            "first, so a live stream exists to publish."
         )}
 
     # 2. bridge it into the ROS graph as a real image topic
@@ -270,9 +253,8 @@ def ros2_usb_camera(ctx: dict) -> dict:
         max_fps=max(0.1, float(ctx.get("max_fps") or 15.0)),
     )
     if not published.get("ok"):
-        camera_node({"action": "stop", "stream_id": stream_id})
         return {**blank, "camera": label, "report": (
-            f"USB camera FAILED to reach ROS: {published.get('error', 'unknown error')}"
+            f"publish FAILED to reach ROS: {published.get('error', 'unknown error')}"
         )}
 
     wait_seconds = max(0.0, float(ctx.get("wait_seconds") or 25.0))
@@ -287,7 +269,7 @@ def ros2_usb_camera(ctx: dict) -> dict:
         time.sleep(1)
     if not discovered:
         return {**blank, "camera": label, "report": (
-            f"USB camera is running, but {topic} did not appear on the ROS graph within "
+            f"the stream is publishing, but {topic} did not appear on the ROS graph within "
             f"{wait_seconds:g}s. The camera itself is fine — this is the ROS side."
         )}
 
