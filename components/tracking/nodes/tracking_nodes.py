@@ -16,6 +16,7 @@ except Exception as exc:  # pragma: no cover - machines without OpenCV
     np = None
     _CV2_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
+from blacknode import streams as bn_streams
 from blacknode.node import Any as AnyPort
 from blacknode.node import Bool, Color, Dict, Enum, Float, Image, Int, List, Text, node
 from blacknode.pkg.blacknode_perception import cv2_runtime
@@ -396,6 +397,7 @@ def cv2_color_object_tracker(ctx: dict) -> dict:
         "trigger": AnyPort,
         "action": Enum(["start", "stop"], default="start"),
         "stream_id": Text(default="cube_tracker"),
+        "frame_stream": Dict(default={}),
         "source_url": Text(default=""),
         "object_color": Color(default="#22c55e"),
         "use_reasoning_color": Bool(default=True),
@@ -417,6 +419,7 @@ def cv2_color_object_tracker(ctx: dict) -> dict:
         "jpeg_quality": Int(default=82),
     },
     outputs={
+        "frame_stream": Dict,
         "preview": Image,
         "snapshot": Image,
         "mask": Image,
@@ -460,7 +463,7 @@ def cv2_color_object_stream(ctx: dict) -> dict:
     if cv2 is None or np is None:
         return {**empty, "report": _missing_cv2_outputs()["report"]}
 
-    source_url = str(ctx.get("source_url") or "").strip()
+    source_url = bn_streams.source_url(ctx.get("frame_stream"), str(ctx.get("source_url") or ""))
     if not source_url:
         return {**empty, "report": "CV2 stream FAILED: connect source_url to a camera snapshot URL"}
 

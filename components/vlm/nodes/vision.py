@@ -19,6 +19,7 @@ from typing import Any
 
 from blacknode.pkg.blacknode_perception import cv2_runtime
 
+from blacknode import streams as bn_streams
 from blacknode.node import Any as AnyPort
 from blacknode.node import Bool, Dict, Enum, Float, Image, Int, List, Text, node
 
@@ -327,6 +328,7 @@ def vision_detection_prompt(ctx: dict) -> dict:
     category=_CATEGORY,
     description="Render camera stream readiness as a dashboard image.",
     inputs={
+        "frame_stream": Dict(default={}),
         "camera_topic": Text(default="/camera/image_raw"),
         "stream_url": Text(default=""),
         "streaming": Bool(default=False),
@@ -337,7 +339,7 @@ def vision_detection_prompt(ctx: dict) -> dict:
 )
 def vision_stream_status(ctx: dict) -> dict:
     topic = str(ctx.get("camera_topic") or "/camera/image_raw")
-    stream_url = str(ctx.get("stream_url") or "")
+    stream_url = bn_streams.source_url(ctx.get("frame_stream"), str(ctx.get("stream_url") or ""))
     streaming = bool(ctx.get("streaming", False))
     run_report = str(ctx.get("run_report") or "")
     stream_report = str(ctx.get("stream_report") or "")
@@ -700,6 +702,7 @@ def vision_reasoning_dashboard(ctx: dict) -> dict:
         "title": Text(default="Live Reasoning"),
     },
     outputs={
+        "frame_stream": Dict,
         "dashboard": Image,
         "streaming": Bool,
         "stream_url": Text,
