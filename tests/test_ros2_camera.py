@@ -276,3 +276,59 @@ def test_templates_validate():
     for path in sorted((_ADAPTER / "templates").glob("*.json")):
         report = validate_workflow(json.loads(path.read_text(encoding="utf-8")))
         assert report.ok, f"{path.name}: {report.to_dict()}"
+
+
+def test_publish_accepts_a_real_camera_frame_stream(monkeypatch):
+    # The regression this pins: Camera emits the frame-stream contract, and the
+    # publisher must find the video URL in it. Reading a key the contract does
+    # not define made a correctly wired graph report "nothing wired".
+    bridged = {}
+    monkeypatch.setattr(rt, "start_host_camera_publisher",
+                        lambda **k: bridged.update(k) or {"ok": True, "backend": "docker"})
+    monkeypatch.setattr(rt, "run_ros2", lambda args, timeout=15.0: {
+        "ok": True, "backend": "docker", "stderr": "",
+        "stdout": "sensor_msgs/msg/Image" if args[:2] == ["topic", "type"] else "/camera/image_raw",
+    })
+    monkeypatch.setattr(rt, "start_image_stream", lambda **k: {
+        "ok": True, "backend": "docker", "stream_url": "http://127.0.0.1:39000/stream.mjpg",
+        "snapshot_url": "", "health_url": "",
+    })
+
+    result = _NODE_REGISTRY["CameraROS2Publish"]({
+        "action": "start",
+        "frame_stream": {
+            "kind": "blacknode.frame-stream",
+            "schema_version": 1,
+            "stream_id": "camera_0",
+            "stream_url": "http://127.0.0.1:49361/stream.mjpg",
+            "snapshot_url": "http://127.0.0.1:49361/snapshot.jpg",
+            "media_type": "image/jpeg",
+        },
+    })
+
+    assert result["streaming"] is True, result["report"]
+    assert bridged["source_url"] == "http://127.0.0.1:49361/stream.mjpg"
+
+
+def test_publish_falls_back_to_the_snapshot_sibling(monkeypatch):
+    # Streams recorded before stream_url joined the contract still publish.
+    bridged = {}
+    monkeypatch.setattr(rt, "start_host_camera_publisher",
+                        lambda **k: bridged.update(k) or {"ok": True, "backend": "docker"})
+    monkeypatch.setattr(rt, "run_ros2", lambda args, timeout=15.0: {
+        "ok": True, "backend": "docker", "stderr": "",
+        "stdout": "sensor_msgs/msg/Image" if args[:2] == ["topic", "type"] else "/camera/image_raw",
+    })
+    monkeypatch.setattr(rt, "start_image_stream", lambda **k: {
+        "ok": True, "backend": "docker", "stream_url": "http://127.0.0.1:39000/stream.mjpg",
+        "snapshot_url": "", "health_url": "",
+    })
+
+    result = _NODE_REGISTRY["CameraROS2Publish"]({
+        "action": "start",
+        "frame_stream": {"stream_id": "camera_0",
+                         "snapshot_url": "http://127.0.0.1:49361/snapshot.jpg"},
+    })
+
+    assert result["streaming"] is True, result["report"]
+    assert bridged["source_url"] == "http://127.0.0.1:49361/stream.mjpg"

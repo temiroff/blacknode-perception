@@ -235,13 +235,26 @@ def ros2_usb_camera(ctx: dict) -> dict:
         return {**blank, "report": "stopped the ROS publisher and the preview"}
 
     frame_stream = ctx.get("frame_stream") if isinstance(ctx.get("frame_stream"), dict) else {}
-    source_url = str(frame_stream.get("stream_url") or "")
     label = str(frame_stream.get("label") or frame_stream.get("stream_id") or "camera")
+    source_url = str(frame_stream.get("stream_url") or "")
     if not source_url:
+        # Streams published before stream_url joined the contract only carry the
+        # single-frame snapshot; the MJPEG endpoint is its sibling on that server.
+        snapshot = str(frame_stream.get("snapshot_url") or "")
+        if snapshot.endswith("/snapshot.jpg"):
+            source_url = snapshot[: -len("/snapshot.jpg")] + "/stream.mjpg"
+
+    if not frame_stream:
         return {**blank, "report": (
             "publish FAILED: nothing wired to 'frame_stream'.\n"
             "CHECK: connect a Camera node's frame_stream output to this input and cook it "
             "first, so a live stream exists to publish."
+        )}
+    if not source_url:
+        return {**blank, "report": (
+            "publish FAILED: the wired frame stream carries no video URL.\n"
+            f"CHECK: it provided {sorted(frame_stream)}. Cook the upstream camera so it is "
+            "streaming before publishing it."
         )}
 
     # 2. bridge it into the ROS graph as a real image topic

@@ -371,6 +371,9 @@ def cv2_camera_stream(ctx: dict) -> dict:
         "kind": "blacknode.frame-stream",
         "schema_version": 1,
         "stream_id": stream_id,
+        # The continuous MJPEG endpoint, alongside the single-frame snapshot:
+        # anything republishing this stream needs the live source, not one frame.
+        "stream_url": stream_url,
         "snapshot_url": snapshot_url,
         "health_url": health_url,
         "media_type": "image/jpeg",

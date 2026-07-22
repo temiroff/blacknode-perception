@@ -207,6 +207,7 @@ def test_camera_stream_starts_native_runtime(monkeypatch):
         "kind": "blacknode.frame-stream",
         "schema_version": 1,
         "stream_id": "local_camera",
+        "stream_url": "http://127.0.0.1:9000/stream.mjpg",
         "snapshot_url": "http://127.0.0.1:9000/snapshot.jpg",
         "health_url": "http://127.0.0.1:9000/health.json",
         "media_type": "image/jpeg",
