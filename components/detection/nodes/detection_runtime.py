@@ -16,6 +16,12 @@ from typing import Any
 
 from blacknode.process import terminate_tree
 
+try:
+    from blacknode.vision_models import resolve_model as _resolve_model
+except Exception:  # pragma: no cover - core without the helper falls back to the name
+    def _resolve_model(name: str) -> str:
+        return name or "yolov8n.pt"
+
 _STREAMS: dict[str, dict[str, Any]] = {}
 
 
@@ -66,7 +72,9 @@ def start_detection_stream(
         sys.executable, str(script),
         "--source-url", source_url,
         "--mode", str(mode or "motion"),
-        "--model", str(model or "yolov8n.pt"),
+        # Resolve a custom-model filename to its path in .blacknode/models here,
+        # so the detached server (a different cwd) still finds it.
+        "--model", _resolve_model(str(model or "yolov8n.pt")),
         "--conf", str(conf),
         "--host", host,
         "--port", str(selected_port),
