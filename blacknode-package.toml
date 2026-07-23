@@ -9,6 +9,7 @@ component-mode = true
 [categories]
 "Perception" = "#18a058"
 "Tracking" = "#2563eb"
+"Detection" = "#f59e0b"
 "Camera" = "#18a058"
 
 [components.camera]
@@ -69,9 +70,16 @@ default = false
 capabilities = ["perception.imu"]
 
 [components.detection]
-description = "Pluggable detection and segmentation contracts."
-default = false
+description = "Live OpenCV object detection (face, motion) over a wired camera stream."
+default = true
 capabilities = ["perception.detection"]
+nodes = ["components/detection/nodes"]
+node-types = ["DetectionStream"]
+
+[components.detection.dependencies]
+pip = ["opencv-python>=4.8", "numpy>=1.24"]
+imports = ["cv2", "numpy"]
+requires = [{ package = "blacknode-perception", component = "camera", version = ">=0.2.0,<1.0.0" }]
 
 [components.tracking]
 description = "Deterministic OpenCV colour-object tracking and target hints."
