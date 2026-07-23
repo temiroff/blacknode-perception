@@ -83,15 +83,31 @@ def capture_loop(args: argparse.Namespace, state: SharedState) -> None:
             ok, frame = capture.read()
             if not ok or frame is None:
                 time.sleep(0.05)
+        first_failure_at = 0.0
         while not state.stop.is_set():
             started = time.monotonic()
             ok, frame = capture.read()
             if not ok or frame is None:
                 failures += 1
-                state.update(b"", ok=False, streaming=False, report=f"camera frame read failed ({failures})")
+                if first_failure_at == 0.0:
+                    first_failure_at = started
+                # It opened but delivers nothing. The usual causes are worth
+                # spelling out, because OpenCV only prints "index out of range".
+                if frames == 0 and started - first_failure_at > 3.0:
+                    report = (
+                        f"camera {device!r} opened but sent no frames. It is likely in use by "
+                        f"another app (a browser tab, Teams/Zoom/OBS, or another Blacknode graph - "
+                        f"including the editor if it is still live), or index {device!r} is a "
+                        f"virtual camera with no active source. Close the other user, or set "
+                        f"'selection' to a different camera number."
+                    )
+                else:
+                    report = f"camera frame read failed ({failures})"
+                state.update(b"", ok=False, streaming=False, report=report)
                 time.sleep(0.1)
                 continue
             failures = 0
+            first_failure_at = 0.0
             frames += 1
             if args.max_width > 0 and frame.shape[1] > args.max_width:
                 scale = args.max_width / float(frame.shape[1])
