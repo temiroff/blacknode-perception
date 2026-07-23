@@ -57,10 +57,15 @@ def start_detection_stream(
     max_width: int = 960,
     jpeg_quality: int = 80,
 ) -> dict[str, Any]:
+    resolved_model = _resolve_model(str(model or "yolov8n.pt"))
+    # Reuse the running server only when nothing that shapes the output changed.
+    # The detector is a startup argument (no live reconfigure), so switching mode
+    # or model has to restart the process - reusing it silently ignored the
+    # change, and left a stale server that read as frozen.
+    signature = (source_url, str(mode or "motion"), resolved_model, round(float(conf), 3))
     existing = _STREAMS.get(stream_id)
-    if existing and existing.get("proc") is not None and existing["proc"].poll() is None:
-        # Same stream already running; a re-cook reuses it rather than leaking a
-        # second server on the same source.
+    if (existing and existing.get("proc") is not None and existing["proc"].poll() is None
+            and existing.get("signature") == signature):
         return {"ok": True, "stream_id": stream_id, **{k: existing[k] for k in ("stream_url", "snapshot_url")}}
 
     stop_detection_stream(stream_id)
@@ -72,9 +77,9 @@ def start_detection_stream(
         sys.executable, str(script),
         "--source-url", source_url,
         "--mode", str(mode or "motion"),
-        # Resolve a custom-model filename to its path in .blacknode/models here,
-        # so the detached server (a different cwd) still finds it.
-        "--model", _resolve_model(str(model or "yolov8n.pt")),
+        # Model resolved above against .blacknode/models so the detached server
+        # (a different cwd) still finds a custom weight.
+        "--model", resolved_model,
         "--conf", str(conf),
         "--host", host,
         "--port", str(selected_port),
@@ -101,6 +106,7 @@ def start_detection_stream(
     base = f"http://{host}:{selected_port}"
     item = {
         "proc": proc, "node_id": node_id, "mode": str(mode or "motion"),
+        "signature": signature,
         "stream_url": f"{base}/stream.mjpg",
         "snapshot_url": f"{base}/snapshot.jpg",
         "detection_url": f"{base}/detection.json",
