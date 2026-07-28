@@ -1,6 +1,6 @@
 [package]
 name = "blacknode-perception"
-version = "0.3.0"
+version = "0.3.1"
 description = "Camera, tracking, VLM, and spatial-perception capabilities organized as selectable components."
 requires-blacknode = ">=0.3.0"
 layer = "perception"
@@ -35,7 +35,8 @@ templates = ["components/camera/adapters/ros2/templates"]
 # Colcon sources the adapter ships; build before ROS 2 nodes can run them.
 ros2-workspaces = ["components/camera/adapters/ros2/ros2_ws"]
 node-types = [
-  "CameraROS2Subscribe", "CameraROS2Publish", "CameraROS2Http"
+  "CameraROS2Provider", "CameraROS2Subscribe", "CameraROS2Publish",
+  "CameraROS2Http"
 ]
 
 [components.camera.adapters.ros2.dependencies]
@@ -56,8 +57,21 @@ requires = [{ package = "blacknode-perception", component = "camera", version = 
 
 [components.depth]
 description = "Depth frames, alignment, validity, and deprojection contracts."
-default = false
+default = true
 capabilities = ["perception.depth"]
+
+[components.depth.adapters.ros2]
+description = "Metric depth-image and point-cloud capability over ROS 2."
+default = true
+capabilities = ["adapter.perception.depth.ros2"]
+nodes = ["components/depth/adapters/ros2/nodes"]
+templates = ["components/depth/adapters/ros2/templates"]
+node-types = ["DepthROS2Subscribe"]
+
+[components.depth.adapters.ros2.dependencies]
+requires = [
+  { package = "blacknode-ros2", component = "core", version = ">=0.4.0,<1.0.0" }
+]
 
 [components.lidar]
 description = "LiDAR scan streams and diagnostics."

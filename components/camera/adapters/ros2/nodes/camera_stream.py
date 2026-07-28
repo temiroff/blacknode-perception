@@ -8,6 +8,8 @@ raising, so workflows stay usable on machines without ROS.
 """
 from __future__ import annotations
 
+import re
+import shlex
 import time
 import urllib.parse
 
@@ -27,6 +29,253 @@ class _LazyRos2Runtime:
 rt = _LazyRos2Runtime()
 
 _CATEGORY = "Perception"
+
+
+def _service_id(value: object) -> str:
+    return (
+        re.sub(r"[^a-zA-Z0-9_-]+", "_", str(value or "camera_provider").strip())
+        .strip("_")[:64]
+        or "camera_provider"
+    )
+
+
+def _camera_interfaces(ctx: dict) -> list[dict]:
+    rosorin = (
+        str(ctx.get("profile") or "").strip().lower() == "rosorin_depth"
+    )
+    rgb_default = (
+        "/depth_cam/rgb0/image_raw" if rosorin else "/camera/image_raw"
+    )
+    rgb_info_default = (
+        "/depth_cam/rgb0/camera_info" if rosorin else "/camera/camera_info"
+    )
+    supplied_rgb = str(ctx.get("rgb_topic") or "").strip()
+    supplied_rgb_info = str(ctx.get("rgb_info_topic") or "").strip()
+    if rosorin and supplied_rgb == "/camera/image_raw":
+        supplied_rgb = ""
+    if rosorin and supplied_rgb_info == "/camera/camera_info":
+        supplied_rgb_info = ""
+    interfaces = [{
+        "name": "rgb_image",
+        "topic": supplied_rgb or rgb_default,
+        "message_type": "sensor_msgs/msg/Image",
+        "required": True,
+    }]
+    optional = [
+        (
+            "rgb_camera_info",
+            "rgb_info_topic",
+            rgb_info_default,
+            "sensor_msgs/msg/CameraInfo",
+        ),
+        (
+            "depth_image",
+            "depth_topic",
+            "/depth_cam/depth0/image_raw",
+            "sensor_msgs/msg/Image",
+        ),
+        (
+            "depth_camera_info",
+            "depth_info_topic",
+            "/depth_cam/depth0/camera_info",
+            "sensor_msgs/msg/CameraInfo",
+        ),
+        (
+            "point_cloud",
+            "points_topic",
+            "/depth_cam/depth0/points",
+            "sensor_msgs/msg/PointCloud2",
+        ),
+    ]
+    require_depth = bool(ctx.get("require_depth", False))
+    for name, field, default, message_type in optional:
+        topic = str(ctx.get(field) or default).strip()
+        if rosorin and field == "rgb_info_topic" and topic == "/camera/camera_info":
+            topic = default
+        if topic:
+            interfaces.append({
+                "name": name,
+                "topic": topic,
+                "message_type": message_type,
+                "required": require_depth and name == "depth_image",
+            })
+    return interfaces
+
+
+def _provider_command(ctx: dict) -> tuple[list[str], str]:
+    profile = str(ctx.get("profile") or "existing_topics").strip().lower()
+    try:
+        extra = shlex.split(str(ctx.get("arguments") or ""))
+    except ValueError as exc:
+        return [], f"invalid provider arguments: {exc}"
+    if profile == "existing_topics":
+        return [], ""
+    if profile == "usb_cam":
+        rgb_topic = str(ctx.get("rgb_topic") or "/camera/image_raw").strip()
+        rgb_info_topic = str(
+            ctx.get("rgb_info_topic") or "/camera/camera_info"
+        ).strip()
+        return [
+            "run",
+            "usb_cam",
+            "usb_cam_node_exe",
+            "--ros-args",
+            "-r",
+            f"image_raw:={rgb_topic}",
+            "-r",
+            f"camera_info:={rgb_info_topic}",
+            *extra,
+        ], ""
+    if profile == "rosorin_depth":
+        return [
+            "launch",
+            "peripherals",
+            "depth_camera.launch.py",
+            *extra,
+        ], ""
+    if profile == "custom_launch":
+        package = str(ctx.get("package") or "").strip()
+        launch_file = str(ctx.get("launch_file") or "").strip()
+        if not package or not launch_file:
+            return [], "custom launch requires package and launch_file"
+        return ["launch", package, launch_file, *extra], ""
+    return [], (
+        "profile must be existing_topics, usb_cam, rosorin_depth, or "
+        "custom_launch"
+    )
+
+
+@node(
+    name="CameraROS2Provider",
+    live=True,
+    category=_CATEGORY,
+    description=(
+        "Start, stop, or inspect a managed ROS 2 RGB/RGB-D camera provider, "
+        "then verify its expected topic group."
+    ),
+    inputs={
+        "trigger": AnyPort,
+        "action": Enum(["start", "status", "stop"], default="status"),
+        "run_id": Text(default="camera_provider"),
+        "profile": Enum(
+            [
+                "existing_topics",
+                "usb_cam",
+                "rosorin_depth",
+                "custom_launch",
+            ],
+            default="existing_topics",
+        ),
+        "package": Text(default=""),
+        "launch_file": Text(default=""),
+        "arguments": Text(default=""),
+        "rgb_topic": Text(default="/camera/image_raw"),
+        "rgb_info_topic": Text(default="/camera/camera_info"),
+        "depth_topic": Text(default="/depth_cam/depth0/image_raw"),
+        "depth_info_topic": Text(default="/depth_cam/depth0/camera_info"),
+        "points_topic": Text(default="/depth_cam/depth0/points"),
+        "require_depth": Bool(default=False),
+        "wait_seconds": Float(default=20.0),
+    },
+    outputs={
+        "running": Bool,
+        "ready": Bool,
+        "run_id": Text,
+        "profile": Text,
+        "interfaces": Dict,
+        "report": Text,
+    },
+)
+def ros2_camera_provider(ctx: dict) -> dict:
+    run_id = _service_id(ctx.get("run_id"))
+    profile = str(ctx.get("profile") or "existing_topics").strip().lower()
+    action = str(ctx.get("action") or "status").strip().lower()
+    command, command_error = _provider_command(ctx)
+    base = {
+        "running": False,
+        "ready": False,
+        "run_id": run_id,
+        "profile": profile,
+        "interfaces": {},
+    }
+    if command_error:
+        return {**base, "report": f"camera provider FAILED: {command_error}"}
+
+    if action == "stop":
+        if not command:
+            return {
+                **base,
+                "report": (
+                    "existing ROS 2 topics are externally managed; no camera "
+                    "provider process was stopped"
+                ),
+            }
+        result = rt.stop_ros2_managed(
+            run_id,
+            pattern="ros2 " + " ".join(command[:3]),
+        )
+        return {
+            **base,
+            "report": (
+                f"stopped camera provider {run_id}"
+                if result.get("ok")
+                else f"camera provider stop FAILED: {result.get('error')}"
+            ),
+        }
+
+    process_status = {
+        "ok": True,
+        "running": profile == "existing_topics",
+        "backend": "",
+    }
+    if action == "start" and command:
+        process_status = rt.run_ros2_managed(run_id, command)
+        process_status["running"] = bool(process_status.get("ok"))
+    elif command:
+        process_status = rt.ros2_managed_status(run_id)
+
+    if not process_status.get("ok"):
+        return {
+            **base,
+            "report": (
+                "camera provider FAILED: "
+                + str(process_status.get("error") or "could not inspect process")
+            ),
+        }
+
+    expected = _camera_interfaces(ctx)
+    if action == "start":
+        topic_status = rt.wait_for_topic_interfaces(
+            expected,
+            timeout=max(0.0, float(ctx.get("wait_seconds") or 0.0)),
+        )
+    else:
+        topic_status = rt.inspect_topic_interfaces(expected)
+    running = bool(process_status.get("running"))
+    ready = bool(topic_status.get("ready"))
+    if profile == "existing_topics":
+        running = ready
+    missing = ", ".join(topic_status.get("missing") or [])
+    return {
+        **base,
+        "running": running,
+        "ready": ready,
+        "interfaces": topic_status,
+        "report": (
+            f"camera provider {run_id} is ready via "
+            f"{topic_status.get('backend') or process_status.get('backend') or '?'}"
+            if ready
+            else (
+                f"camera provider {run_id} is running, but required topics need "
+                f"attention: {missing or topic_status.get('error') or 'unknown'}"
+                if running
+                else (
+                    f"camera provider {run_id} is stopped; required topics need "
+                    f"attention: {missing or topic_status.get('error') or 'unknown'}"
+                )
+            )
+        ),
+    }
 
 
 def _resolve_image_message_type(topic: str, requested: str) -> tuple[str, str]:

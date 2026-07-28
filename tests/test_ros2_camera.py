@@ -23,7 +23,12 @@ _tag_new_package_nodes(_before, "blacknode-perception", _ADAPTER_NODES, "camera"
 from blacknode.pkg.blacknode_perception.camera.adapters.ros2 import camera_stream as cam
 from blacknode.pkg.blacknode_ros2 import ros2_runtime as rt
 
-NEW_NODES = ["CameraROS2Subscribe", "CameraROS2Publish", "CameraROS2Http"]
+NEW_NODES = [
+    "CameraROS2Provider",
+    "CameraROS2Subscribe",
+    "CameraROS2Publish",
+    "CameraROS2Http",
+]
 
 
 def test_new_nodes_registered_with_category_and_package():
@@ -41,6 +46,128 @@ def test_no_backend_is_structured_error(monkeypatch):
     assert result["preview"] == ""
     assert result["streaming"] is False
     assert "FAILED" in result["report"]
+
+
+# --- CameraROS2Provider -------------------------------------------------------
+
+def test_usb_camera_provider_starts_named_process_and_verifies_topics(monkeypatch):
+    captured = {}
+
+    def fake_start(key, args):
+        captured.update(key=key, args=args)
+        return {"ok": True, "backend": "native"}
+
+    monkeypatch.setattr(rt, "run_ros2_managed", fake_start)
+    monkeypatch.setattr(rt, "wait_for_topic_interfaces", lambda items, timeout: {
+        "ok": True,
+        "ready": True,
+        "backend": "native",
+        "interfaces": items,
+        "missing": [],
+    })
+
+    result = _NODE_REGISTRY["CameraROS2Provider"]({
+        "action": "start",
+        "run_id": "front camera",
+        "profile": "usb_cam",
+        "rgb_topic": "/front/image_raw",
+        "rgb_info_topic": "/front/camera_info",
+        "depth_topic": "",
+        "depth_info_topic": "",
+        "points_topic": "",
+    })
+
+    assert result["running"] is True
+    assert result["ready"] is True
+    assert captured["key"] == "front_camera"
+    assert captured["args"] == [
+        "run",
+        "usb_cam",
+        "usb_cam_node_exe",
+        "--ros-args",
+        "-r",
+        "image_raw:=/front/image_raw",
+        "-r",
+        "camera_info:=/front/camera_info",
+    ]
+
+
+def test_rosorin_provider_uses_normalized_rgbd_interfaces(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(rt, "run_ros2_managed", lambda key, args: (
+        captured.update(key=key, args=args)
+        or {"ok": True, "backend": "native"}
+    ))
+
+    def fake_wait(items, timeout):
+        captured["interfaces"] = items
+        return {
+            "ok": True,
+            "ready": True,
+            "backend": "native",
+            "interfaces": items,
+            "missing": [],
+        }
+
+    monkeypatch.setattr(rt, "wait_for_topic_interfaces", fake_wait)
+    result = _NODE_REGISTRY["CameraROS2Provider"]({
+        "action": "start",
+        "profile": "rosorin_depth",
+        "require_depth": True,
+    })
+
+    assert result["ready"] is True
+    assert captured["args"] == [
+        "launch",
+        "peripherals",
+        "depth_camera.launch.py",
+    ]
+    by_name = {item["name"]: item for item in captured["interfaces"]}
+    assert by_name["rgb_image"]["topic"] == "/depth_cam/rgb0/image_raw"
+    assert by_name["depth_image"]["topic"] == "/depth_cam/depth0/image_raw"
+    assert by_name["depth_image"]["required"] is True
+
+
+def test_existing_camera_topics_status_never_starts_process(monkeypatch):
+    monkeypatch.setattr(
+        rt,
+        "run_ros2_managed",
+        lambda *args: pytest.fail("existing topics must not start a process"),
+    )
+    monkeypatch.setattr(rt, "inspect_topic_interfaces", lambda items: {
+        "ok": True,
+        "ready": True,
+        "backend": "native",
+        "interfaces": items,
+        "missing": [],
+    })
+
+    result = _NODE_REGISTRY["CameraROS2Provider"]({
+        "action": "status",
+        "profile": "existing_topics",
+        "rgb_topic": "/camera/image_raw",
+    })
+
+    assert result["running"] is True
+    assert result["ready"] is True
+
+
+def test_camera_provider_stop_is_scoped(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(rt, "stop_ros2_managed", lambda key, pattern="": (
+        captured.update(key=key, pattern=pattern)
+        or {"ok": True, "stopped": 1}
+    ))
+
+    result = _NODE_REGISTRY["CameraROS2Provider"]({
+        "action": "stop",
+        "profile": "usb_cam",
+        "run_id": "front camera",
+    })
+
+    assert result["running"] is False
+    assert captured["key"] == "front_camera"
+    assert captured["pattern"] == "ros2 run usb_cam usb_cam_node_exe"
 
 
 # --- CameraROS2Subscribe --------------------------------------------------------------
