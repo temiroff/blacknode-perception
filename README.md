@@ -12,7 +12,8 @@ topics, processes, and transports, while `blacknode-perception` owns the
 camera capability itself — direct local cameras, OpenCV tracking, frame
 prompts, dashboards, optional VLM/LLM inspection, and the **`camera/ros2`
 adapter** that puts the camera capability on a ROS 2 graph
-(`CameraROS2Subscribe`, `CameraROS2Publish`, `CameraROS2Http`, plus the bundled
+(`CameraROS2Provider`, `CameraROS2Subscribe`, `CameraROS2Publish`,
+`CameraROS2Http`, and `DepthROS2Subscribe`, plus the bundled
 `perception_camera` colcon package under `components/camera/adapters/ros2/ros2_ws/`).
 
 The adapter declares a versioned dependency on `blacknode-ros2/core`;
@@ -75,6 +76,9 @@ rotation:=0
 | Node | What it does |
 |---|---|
 | `Camera` | Discovers, selects, and streams one local camera with a live preview; duplicate it for more cameras |
+| `CameraROS2Provider` | Starts, stops, or inspects a managed USB, ROSOrin RGB-D, custom-launch, or existing-topic provider and verifies its declared topic group |
+| `CameraROS2Subscribe` | Streams a raw or compressed ROS 2 color-image topic into the editor |
+| `DepthROS2Subscribe` | Previews `16UC1`/`32FC1` depth while preserving metric depth and optional point-cloud contracts |
 | `CameraCalibration` | Captures checkerboard views, solves intrinsics and field of view, and emits a calibrated camera stream |
 | `FramePrompt` | Builds a concise robot-vision prompt for one camera frame |
 | `DetectionPrompt` | Builds an LLM prompt from CV2 detections for local reasoning |
@@ -85,6 +89,23 @@ rotation:=0
 | `TrackingObject` | Live object tracking on a wired camera stream: draws boxes around the tracked colour object and serves annotated MJPEG plus detection JSON. Wire a Camera's `frame_stream` in |
 | `TrackingColorMask` | (hidden helper) Creates an HSV color mask from a Blacknode image |
 | `TrackingColorHint` | (hidden helper) Converts target/reasoning text like `track red cube` into label and HSV settings for tracking |
+
+## Managed RGB-D camera
+
+Use the **ROSOrin RGB-D Camera** template to start the ROSOrin
+`peripherals depth_camera.launch.py` provider and open color plus depth
+previews. Its default live interfaces are:
+
+- RGB image: `/depth_cam/rgb0/image_raw`
+- RGB camera info: `/depth_cam/rgb0/camera_info`
+- metric depth: `/depth_cam/depth0/image_raw`
+- depth camera info: `/depth_cam/depth0/camera_info`
+- point cloud: `/depth_cam/depth0/points`
+
+The depth preview applies display-only percentile scaling. Downstream nodes
+continue to receive the original metric encoding and `depth_scale`, so SLAM,
+obstacle avoidance, dataset recording, and policy workflows do not consume the
+visualized JPEG as sensor data.
 
 ## Camera calibration
 

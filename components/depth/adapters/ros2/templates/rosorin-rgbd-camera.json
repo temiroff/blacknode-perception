@@ -1,0 +1,356 @@
+{
+  "kind": "blacknode.workflow",
+  "schema_version": 1,
+  "name": "ROSOrin RGB-D Camera",
+  "saved_at": "2026-07-27T00:00:00",
+  "entrypoint": {
+    "node_id": "rgb_out",
+    "port": "image"
+  },
+  "metadata": {
+    "template": true,
+    "description": "Start the ROSOrin depth-camera provider, verify its RGB and metric-depth topic group, and expose live RGB and depth previews. The metric depth and point-cloud contracts remain available for detection, SLAM, navigation, and policy workflows.",
+    "color": "#00d2ff",
+    "required_packages": [
+      "blacknode-ros2",
+      "blacknode-perception"
+    ]
+  },
+  "node_meta": {
+    "provider": {
+      "id": "provider",
+      "type": "CameraROS2Provider",
+      "params": {
+        "action": "start",
+        "run_id": "rosorin_rgbd_camera",
+        "profile": "rosorin_depth",
+        "rgb_topic": "/depth_cam/rgb0/image_raw",
+        "rgb_info_topic": "/depth_cam/rgb0/camera_info",
+        "depth_topic": "/depth_cam/depth0/image_raw",
+        "depth_info_topic": "/depth_cam/depth0/camera_info",
+        "points_topic": "/depth_cam/depth0/points",
+        "require_depth": true,
+        "wait_seconds": 25.0
+      },
+      "pos": [100, 260],
+      "inputs": [
+        "trigger",
+        "action",
+        "run_id",
+        "profile",
+        "package",
+        "launch_file",
+        "arguments",
+        "rgb_topic",
+        "rgb_info_topic",
+        "depth_topic",
+        "depth_info_topic",
+        "points_topic",
+        "require_depth",
+        "wait_seconds"
+      ],
+      "outputs": [
+        "running",
+        "ready",
+        "run_id",
+        "profile",
+        "interfaces",
+        "report"
+      ],
+      "input_types": {
+        "trigger": "Any",
+        "action": "Text",
+        "run_id": "Text",
+        "profile": "Text",
+        "package": "Text",
+        "launch_file": "Text",
+        "arguments": "Text",
+        "rgb_topic": "Text",
+        "rgb_info_topic": "Text",
+        "depth_topic": "Text",
+        "depth_info_topic": "Text",
+        "points_topic": "Text",
+        "require_depth": "Bool",
+        "wait_seconds": "Float"
+      },
+      "output_types": {
+        "running": "Bool",
+        "ready": "Bool",
+        "run_id": "Text",
+        "profile": "Text",
+        "interfaces": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "action": "status",
+        "run_id": "camera_provider",
+        "profile": "existing_topics",
+        "package": "",
+        "launch_file": "",
+        "arguments": "",
+        "rgb_topic": "/camera/image_raw",
+        "rgb_info_topic": "/camera/camera_info",
+        "depth_topic": "/depth_cam/depth0/image_raw",
+        "depth_info_topic": "/depth_cam/depth0/camera_info",
+        "points_topic": "/depth_cam/depth0/points",
+        "require_depth": false,
+        "wait_seconds": 20.0
+      }
+    },
+    "rgb": {
+      "id": "rgb",
+      "type": "CameraROS2Subscribe",
+      "params": {
+        "action": "start",
+        "stream_id": "rosorin_rgb",
+        "topic": "/depth_cam/rgb0/image_raw",
+        "message_type": "raw",
+        "host": "0.0.0.0",
+        "max_fps": 15.0,
+        "max_width": 960,
+        "jpeg_quality": 82
+      },
+      "pos": [500, 100],
+      "inputs": [
+        "trigger",
+        "action",
+        "stream_id",
+        "topic",
+        "message_type",
+        "host",
+        "port",
+        "max_fps",
+        "max_width",
+        "jpeg_quality"
+      ],
+      "outputs": [
+        "preview",
+        "streaming",
+        "stream_url",
+        "snapshot_url",
+        "stream_id",
+        "report",
+        "frame_stream"
+      ],
+      "input_types": {
+        "trigger": "Any",
+        "action": "Text",
+        "stream_id": "Text",
+        "topic": "Text",
+        "message_type": "Text",
+        "host": "Text",
+        "port": "Int",
+        "max_fps": "Float",
+        "max_width": "Int",
+        "jpeg_quality": "Int"
+      },
+      "output_types": {
+        "preview": "Image",
+        "streaming": "Bool",
+        "stream_url": "Text",
+        "snapshot_url": "Text",
+        "stream_id": "Text",
+        "report": "Text",
+        "frame_stream": "Dict"
+      },
+      "input_defaults": {
+        "action": "start",
+        "stream_id": "camera",
+        "topic": "/camera/image_raw",
+        "message_type": "auto",
+        "host": "127.0.0.1",
+        "port": 0,
+        "max_fps": 10.0,
+        "max_width": 960,
+        "jpeg_quality": 80
+      }
+    },
+    "depth": {
+      "id": "depth",
+      "type": "DepthROS2Subscribe",
+      "params": {
+        "action": "start",
+        "stream_id": "rosorin_depth",
+        "topic": "/depth_cam/depth0/image_raw",
+        "camera_info_topic": "/depth_cam/depth0/camera_info",
+        "points_topic": "/depth_cam/depth0/points",
+        "frame_id": "depth_camera_link",
+        "encoding": "auto",
+        "depth_scale": 0.001,
+        "host": "0.0.0.0",
+        "max_fps": 10.0,
+        "max_width": 960,
+        "jpeg_quality": 82
+      },
+      "pos": [500, 430],
+      "inputs": [
+        "trigger",
+        "action",
+        "stream_id",
+        "topic",
+        "camera_info_topic",
+        "points_topic",
+        "frame_id",
+        "encoding",
+        "depth_scale",
+        "host",
+        "port",
+        "max_fps",
+        "max_width",
+        "jpeg_quality"
+      ],
+      "outputs": [
+        "preview",
+        "streaming",
+        "stream_url",
+        "snapshot_url",
+        "health_url",
+        "stream_id",
+        "depth_stream",
+        "point_cloud_stream",
+        "report"
+      ],
+      "input_types": {
+        "trigger": "Any",
+        "action": "Text",
+        "stream_id": "Text",
+        "topic": "Text",
+        "camera_info_topic": "Text",
+        "points_topic": "Text",
+        "frame_id": "Text",
+        "encoding": "Text",
+        "depth_scale": "Float",
+        "host": "Text",
+        "port": "Int",
+        "max_fps": "Float",
+        "max_width": "Int",
+        "jpeg_quality": "Int"
+      },
+      "output_types": {
+        "preview": "Image",
+        "streaming": "Bool",
+        "stream_url": "Text",
+        "snapshot_url": "Text",
+        "health_url": "Text",
+        "stream_id": "Text",
+        "depth_stream": "Dict",
+        "point_cloud_stream": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "action": "start",
+        "stream_id": "depth_camera",
+        "topic": "/depth_cam/depth0/image_raw",
+        "camera_info_topic": "/depth_cam/depth0/camera_info",
+        "points_topic": "/depth_cam/depth0/points",
+        "frame_id": "depth_camera_link",
+        "encoding": "auto",
+        "depth_scale": 0.001,
+        "host": "127.0.0.1",
+        "port": 0,
+        "max_fps": 10.0,
+        "max_width": 960,
+        "jpeg_quality": 80
+      }
+    },
+    "rgb_out": {
+      "id": "rgb_out",
+      "type": "OutputImage",
+      "params": {},
+      "pos": [930, 100],
+      "inputs": ["image"],
+      "outputs": ["image"],
+      "input_types": {"image": "Image"},
+      "output_types": {"image": "Image"},
+      "input_defaults": {}
+    },
+    "depth_out": {
+      "id": "depth_out",
+      "type": "OutputImage",
+      "params": {},
+      "pos": [930, 430],
+      "inputs": ["image"],
+      "outputs": ["image"],
+      "input_types": {"image": "Image"},
+      "output_types": {"image": "Image"},
+      "input_defaults": {}
+    },
+    "contracts_out": {
+      "id": "contracts_out",
+      "type": "Output",
+      "params": {"label": "metric depth and point-cloud contracts"},
+      "pos": [930, 650],
+      "inputs": ["value"],
+      "outputs": [],
+      "input_types": {"value": "Any"},
+      "output_types": {},
+      "input_defaults": {}
+    },
+    "points_out": {
+      "id": "points_out",
+      "type": "Output",
+      "params": {"label": "point-cloud stream contract"},
+      "pos": [930, 760],
+      "inputs": ["value"],
+      "outputs": [],
+      "input_types": {"value": "Any"},
+      "output_types": {},
+      "input_defaults": {}
+    },
+    "status_out": {
+      "id": "status_out",
+      "type": "Output",
+      "params": {"label": "RGB-D provider status"},
+      "pos": [500, 720],
+      "inputs": ["value"],
+      "outputs": [],
+      "input_types": {"value": "Any"},
+      "output_types": {},
+      "input_defaults": {}
+    }
+  },
+  "edges": [
+    {
+      "from": "provider",
+      "from_port": "report",
+      "to": "rgb",
+      "to_port": "trigger"
+    },
+    {
+      "from": "provider",
+      "from_port": "report",
+      "to": "depth",
+      "to_port": "trigger"
+    },
+    {
+      "from": "provider",
+      "from_port": "report",
+      "to": "status_out",
+      "to_port": "value"
+    },
+    {
+      "from": "rgb",
+      "from_port": "preview",
+      "to": "rgb_out",
+      "to_port": "image"
+    },
+    {
+      "from": "depth",
+      "from_port": "preview",
+      "to": "depth_out",
+      "to_port": "image"
+    },
+    {
+      "from": "depth",
+      "from_port": "depth_stream",
+      "to": "contracts_out",
+      "to_port": "value"
+    },
+    {
+      "from": "depth",
+      "from_port": "point_cloud_stream",
+      "to": "points_out",
+      "to_port": "value"
+    }
+  ]
+}
