@@ -7,14 +7,15 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo, Image
 
 
 class UsbCamera(Node):
     def __init__(self) -> None:
         super().__init__("perception_camera")
-        self.declare_parameter("device", 0)
+        self.declare_parameter("device", "0")
         self.declare_parameter("image_topic", "/camera/image_raw")
+        self.declare_parameter("camera_info_topic", "/camera/camera_info")
         self.declare_parameter("frame_id", "camera")
         self.declare_parameter("hz", 30.0)
         self.declare_parameter("width", 640)
@@ -32,6 +33,9 @@ class UsbCamera(Node):
         self.frame_id = str(self.get_parameter("frame_id").value)
         self.rotation = int(self.get_parameter("rotation").value)
         self.image_topic = str(self.get_parameter("image_topic").value)
+        self.camera_info_topic = str(
+            self.get_parameter("camera_info_topic").value
+        )
         hz = max(0.1, float(self.get_parameter("hz").value))
         width = int(self.get_parameter("width").value)
         height = int(self.get_parameter("height").value)
@@ -46,6 +50,11 @@ class UsbCamera(Node):
 
         self.bridge = CvBridge()
         self.pub = self.create_publisher(Image, self.image_topic, 10)
+        self.info_pub = (
+            self.create_publisher(CameraInfo, self.camera_info_topic, 10)
+            if self.camera_info_topic
+            else None
+        )
         self.last_warn = 0.0
         self._warmup(max(0, int(self.get_parameter("warmup_frames").value)))
         self.create_timer(1.0 / hz, self.tick)
@@ -71,6 +80,12 @@ class UsbCamera(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.frame_id
         self.pub.publish(msg)
+        if self.info_pub is not None:
+            info = CameraInfo()
+            info.header = msg.header
+            info.width = int(msg.width)
+            info.height = int(msg.height)
+            self.info_pub.publish(info)
 
     def destroy_node(self) -> bool:
         self.cap.release()

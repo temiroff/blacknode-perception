@@ -81,18 +81,15 @@ def test_usb_camera_provider_starts_named_process_and_verifies_topics(monkeypatc
     assert result["ready"] is True
     assert captured["key"] == "front_camera"
     assert captured["args"] == [
-        "run",
-        "usb_cam",
-        "usb_cam_node_exe",
-        "--ros-args",
-        "-r",
-        "image_raw:=/front/image_raw",
-        "-r",
-        "camera_info:=/front/camera_info",
+        "launch",
+        "perception_camera",
+        "usb_camera.launch.py",
+        "image_topic:=/front/image_raw",
+        "camera_info_topic:=/front/camera_info",
     ]
 
 
-def test_rosorin_provider_uses_normalized_rgbd_interfaces(monkeypatch):
+def test_blacknode_provider_uses_normalized_rgbd_interfaces(monkeypatch):
     captured = {}
     monkeypatch.setattr(rt, "run_ros2_managed", lambda key, args: (
         captured.update(key=key, args=args)
@@ -112,20 +109,21 @@ def test_rosorin_provider_uses_normalized_rgbd_interfaces(monkeypatch):
     monkeypatch.setattr(rt, "wait_for_topic_interfaces", fake_wait)
     result = _NODE_REGISTRY["CameraROS2Provider"]({
         "action": "start",
-        "profile": "rosorin_depth",
+        "profile": "blacknode_rgbd",
         "require_depth": True,
     })
 
     assert result["ready"] is True
     assert captured["args"] == [
         "launch",
-        "peripherals",
-        "depth_camera.launch.py",
+        "perception_camera",
+        "rgbd_camera.launch.py",
     ]
     by_name = {item["name"]: item for item in captured["interfaces"]}
-    assert by_name["rgb_image"]["topic"] == "/depth_cam/rgb0/image_raw"
-    assert by_name["depth_image"]["topic"] == "/depth_cam/depth0/image_raw"
+    assert by_name["rgb_image"]["topic"] == "/camera/rgb/image_raw"
+    assert by_name["depth_image"]["topic"] == "/camera/depth/image_raw"
     assert by_name["depth_image"]["required"] is True
+    assert "point_cloud" not in by_name
 
 
 def test_existing_camera_topics_status_never_starts_process(monkeypatch):
@@ -167,7 +165,9 @@ def test_camera_provider_stop_is_scoped(monkeypatch):
 
     assert result["running"] is False
     assert captured["key"] == "front_camera"
-    assert captured["pattern"] == "ros2 run usb_cam usb_cam_node_exe"
+    assert captured["pattern"] == (
+        "ros2 launch perception_camera usb_camera.launch.py"
+    )
 
 
 # --- CameraROS2Subscribe --------------------------------------------------------------

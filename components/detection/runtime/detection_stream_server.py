@@ -98,9 +98,11 @@ class _ContourDetector:
 
 
 class _YoloDetector:
-    """Real object detection via ultralytics YOLO — the same API the ROSOrin
-    robot uses. ultralytics is a heavy optional dependency (pulls torch), so the
-    import is deferred here and its absence is reported, not crashed on."""
+    """Real object detection via ultralytics YOLO.
+
+    Ultralytics is a heavy optional dependency, so the import is deferred and
+    its absence is reported as a structured provider error.
+    """
 
     def __init__(self, model: str, conf: float, classes: list[str] | None = None) -> None:
         from ultralytics import YOLO  # optional heavy dep; guarded by the caller

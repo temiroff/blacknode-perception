@@ -40,20 +40,18 @@ def _service_id(value: object) -> str:
 
 
 def _camera_interfaces(ctx: dict) -> list[dict]:
-    rosorin = (
-        str(ctx.get("profile") or "").strip().lower() == "rosorin_depth"
+    rgbd = (
+        str(ctx.get("profile") or "").strip().lower() == "blacknode_rgbd"
     )
-    rgb_default = (
-        "/depth_cam/rgb0/image_raw" if rosorin else "/camera/image_raw"
-    )
+    rgb_default = "/camera/rgb/image_raw" if rgbd else "/camera/image_raw"
     rgb_info_default = (
-        "/depth_cam/rgb0/camera_info" if rosorin else "/camera/camera_info"
+        "/camera/rgb/camera_info" if rgbd else "/camera/camera_info"
     )
     supplied_rgb = str(ctx.get("rgb_topic") or "").strip()
     supplied_rgb_info = str(ctx.get("rgb_info_topic") or "").strip()
-    if rosorin and supplied_rgb == "/camera/image_raw":
+    if rgbd and supplied_rgb == "/camera/image_raw":
         supplied_rgb = ""
-    if rosorin and supplied_rgb_info == "/camera/camera_info":
+    if rgbd and supplied_rgb_info == "/camera/camera_info":
         supplied_rgb_info = ""
     interfaces = [{
         "name": "rgb_image",
@@ -71,27 +69,25 @@ def _camera_interfaces(ctx: dict) -> list[dict]:
         (
             "depth_image",
             "depth_topic",
-            "/depth_cam/depth0/image_raw",
+            "/camera/depth/image_raw" if rgbd else "",
             "sensor_msgs/msg/Image",
         ),
         (
             "depth_camera_info",
             "depth_info_topic",
-            "/depth_cam/depth0/camera_info",
+            "/camera/depth/camera_info" if rgbd else "",
             "sensor_msgs/msg/CameraInfo",
         ),
         (
             "point_cloud",
             "points_topic",
-            "/depth_cam/depth0/points",
+            "",
             "sensor_msgs/msg/PointCloud2",
         ),
     ]
-    require_depth = bool(ctx.get("require_depth", False))
+    require_depth = rgbd or bool(ctx.get("require_depth", False))
     for name, field, default, message_type in optional:
         topic = str(ctx.get(field) or default).strip()
-        if rosorin and field == "rgb_info_topic" and topic == "/camera/camera_info":
-            topic = default
         if topic:
             interfaces.append({
                 "name": name,
@@ -116,21 +112,18 @@ def _provider_command(ctx: dict) -> tuple[list[str], str]:
             ctx.get("rgb_info_topic") or "/camera/camera_info"
         ).strip()
         return [
-            "run",
-            "usb_cam",
-            "usb_cam_node_exe",
-            "--ros-args",
-            "-r",
-            f"image_raw:={rgb_topic}",
-            "-r",
-            f"camera_info:={rgb_info_topic}",
+            "launch",
+            "perception_camera",
+            "usb_camera.launch.py",
+            f"image_topic:={rgb_topic}",
+            f"camera_info_topic:={rgb_info_topic}",
             *extra,
         ], ""
-    if profile == "rosorin_depth":
+    if profile == "blacknode_rgbd":
         return [
             "launch",
-            "peripherals",
-            "depth_camera.launch.py",
+            "perception_camera",
+            "rgbd_camera.launch.py",
             *extra,
         ], ""
     if profile == "custom_launch":
@@ -140,7 +133,7 @@ def _provider_command(ctx: dict) -> tuple[list[str], str]:
             return [], "custom launch requires package and launch_file"
         return ["launch", package, launch_file, *extra], ""
     return [], (
-        "profile must be existing_topics, usb_cam, rosorin_depth, or "
+        "profile must be existing_topics, usb_cam, blacknode_rgbd, or "
         "custom_launch"
     )
 
@@ -161,7 +154,7 @@ def _provider_command(ctx: dict) -> tuple[list[str], str]:
             [
                 "existing_topics",
                 "usb_cam",
-                "rosorin_depth",
+                "blacknode_rgbd",
                 "custom_launch",
             ],
             default="existing_topics",
@@ -171,9 +164,9 @@ def _provider_command(ctx: dict) -> tuple[list[str], str]:
         "arguments": Text(default=""),
         "rgb_topic": Text(default="/camera/image_raw"),
         "rgb_info_topic": Text(default="/camera/camera_info"),
-        "depth_topic": Text(default="/depth_cam/depth0/image_raw"),
-        "depth_info_topic": Text(default="/depth_cam/depth0/camera_info"),
-        "points_topic": Text(default="/depth_cam/depth0/points"),
+        "depth_topic": Text(default=""),
+        "depth_info_topic": Text(default=""),
+        "points_topic": Text(default=""),
         "require_depth": Bool(default=False),
         "wait_seconds": Float(default=20.0),
     },
