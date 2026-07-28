@@ -1,6 +1,6 @@
 [package]
 name = "blacknode-perception"
-version = "0.3.2"
+version = "0.3.3"
 description = "Camera, tracking, VLM, and spatial-perception capabilities organized as selectable components."
 requires-blacknode = ">=0.3.0"
 layer = "perception"

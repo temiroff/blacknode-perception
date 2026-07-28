@@ -126,6 +126,34 @@ def test_blacknode_provider_uses_normalized_rgbd_interfaces(monkeypatch):
     assert "point_cloud" not in by_name
 
 
+def test_retired_depth_profile_migrates_to_blacknode_rgbd(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(rt, "run_ros2_managed", lambda key, args: (
+        captured.update(key=key, args=args)
+        or {"ok": True, "backend": "native"}
+    ))
+    monkeypatch.setattr(rt, "wait_for_topic_interfaces", lambda items, timeout: {
+        "ok": True,
+        "ready": True,
+        "backend": "native",
+        "interfaces": items,
+        "missing": [],
+    })
+
+    result = _NODE_REGISTRY["CameraROS2Provider"]({
+        "action": "start",
+        "profile": "retired_depth_profile",
+        "require_depth": True,
+    })
+
+    assert result["profile"] == "blacknode_rgbd"
+    assert captured["args"][:3] == [
+        "launch",
+        "perception_camera",
+        "rgbd_camera.launch.py",
+    ]
+
+
 def test_existing_camera_topics_status_never_starts_process(monkeypatch):
     monkeypatch.setattr(
         rt,
