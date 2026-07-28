@@ -43,10 +43,10 @@ def _blank(stream_id: str, report: str) -> dict:
         "trigger": AnyPort,
         "action": Enum(["start", "stop"], default="start"),
         "stream_id": Text(default="depth_camera"),
-        "topic": Text(default="/depth_cam/depth0/image_raw"),
-        "camera_info_topic": Text(default="/depth_cam/depth0/camera_info"),
-        "points_topic": Text(default="/depth_cam/depth0/points"),
-        "frame_id": Text(default="depth_camera_link"),
+        "topic": Text(default="/camera/depth/image_raw"),
+        "camera_info_topic": Text(default="/camera/depth/camera_info"),
+        "points_topic": Text(default=""),
+        "frame_id": Text(default="camera_depth"),
         "encoding": Enum(["auto", "16UC1", "32FC1"], default="auto"),
         "depth_scale": Float(default=0.001),
         "host": Text(default="127.0.0.1"),
@@ -79,7 +79,7 @@ def ros2_depth_stream(ctx: dict) -> dict:
         )
 
     topic = str(
-        ctx.get("topic") or "/depth_cam/depth0/image_raw"
+        ctx.get("topic") or "/camera/depth/image_raw"
     ).strip()
     interface = rt.inspect_topic_interfaces([{
         "name": "depth_image",

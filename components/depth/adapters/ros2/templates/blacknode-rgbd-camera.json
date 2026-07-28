@@ -1,7 +1,7 @@
 {
   "kind": "blacknode.workflow",
   "schema_version": 1,
-  "name": "ROSOrin RGB-D Camera",
+  "name": "Blacknode RGB-D Camera",
   "saved_at": "2026-07-27T00:00:00",
   "entrypoint": {
     "node_id": "rgb_out",
@@ -9,7 +9,7 @@
   },
   "metadata": {
     "template": true,
-    "description": "Start the ROSOrin depth-camera provider, verify its RGB and metric-depth topic group, and expose live RGB and depth previews. The metric depth and point-cloud contracts remain available for detection, SLAM, navigation, and policy workflows.",
+    "description": "Start Blacknode's managed RGB-D provider, verify its RGB and metric-depth topic group, and expose live RGB and depth previews for detection, mapping, navigation, and policy workflows.",
     "color": "#00d2ff",
     "required_packages": [
       "blacknode-ros2",
@@ -22,13 +22,14 @@
       "type": "CameraROS2Provider",
       "params": {
         "action": "start",
-        "run_id": "rosorin_rgbd_camera",
-        "profile": "rosorin_depth",
-        "rgb_topic": "/depth_cam/rgb0/image_raw",
-        "rgb_info_topic": "/depth_cam/rgb0/camera_info",
-        "depth_topic": "/depth_cam/depth0/image_raw",
-        "depth_info_topic": "/depth_cam/depth0/camera_info",
-        "points_topic": "/depth_cam/depth0/points",
+        "run_id": "blacknode_rgbd_camera",
+        "profile": "blacknode_rgbd",
+        "arguments": "rgb_device:=0 depth_device:=1",
+        "rgb_topic": "/camera/rgb/image_raw",
+        "rgb_info_topic": "/camera/rgb/camera_info",
+        "depth_topic": "/camera/depth/image_raw",
+        "depth_info_topic": "/camera/depth/camera_info",
+        "points_topic": "",
         "require_depth": true,
         "wait_seconds": 25.0
       },
@@ -90,9 +91,9 @@
         "arguments": "",
         "rgb_topic": "/camera/image_raw",
         "rgb_info_topic": "/camera/camera_info",
-        "depth_topic": "/depth_cam/depth0/image_raw",
-        "depth_info_topic": "/depth_cam/depth0/camera_info",
-        "points_topic": "/depth_cam/depth0/points",
+        "depth_topic": "",
+        "depth_info_topic": "",
+        "points_topic": "",
         "require_depth": false,
         "wait_seconds": 20.0
       }
@@ -102,8 +103,8 @@
       "type": "CameraROS2Subscribe",
       "params": {
         "action": "start",
-        "stream_id": "rosorin_rgb",
-        "topic": "/depth_cam/rgb0/image_raw",
+        "stream_id": "blacknode_rgb",
+        "topic": "/camera/rgb/image_raw",
         "message_type": "raw",
         "host": "0.0.0.0",
         "max_fps": 15.0,
@@ -170,11 +171,11 @@
       "type": "DepthROS2Subscribe",
       "params": {
         "action": "start",
-        "stream_id": "rosorin_depth",
-        "topic": "/depth_cam/depth0/image_raw",
-        "camera_info_topic": "/depth_cam/depth0/camera_info",
-        "points_topic": "/depth_cam/depth0/points",
-        "frame_id": "depth_camera_link",
+        "stream_id": "blacknode_depth",
+        "topic": "/camera/depth/image_raw",
+        "camera_info_topic": "/camera/depth/camera_info",
+        "points_topic": "",
+        "frame_id": "camera_depth",
         "encoding": "auto",
         "depth_scale": 0.001,
         "host": "0.0.0.0",
@@ -240,10 +241,10 @@
       "input_defaults": {
         "action": "start",
         "stream_id": "depth_camera",
-        "topic": "/depth_cam/depth0/image_raw",
-        "camera_info_topic": "/depth_cam/depth0/camera_info",
-        "points_topic": "/depth_cam/depth0/points",
-        "frame_id": "depth_camera_link",
+        "topic": "/camera/depth/image_raw",
+        "camera_info_topic": "/camera/depth/camera_info",
+        "points_topic": "",
+        "frame_id": "camera_depth",
         "encoding": "auto",
         "depth_scale": 0.001,
         "host": "127.0.0.1",
@@ -278,19 +279,8 @@
     "contracts_out": {
       "id": "contracts_out",
       "type": "Output",
-      "params": {"label": "metric depth and point-cloud contracts"},
+      "params": {"label": "metric depth stream contract"},
       "pos": [930, 650],
-      "inputs": ["value"],
-      "outputs": [],
-      "input_types": {"value": "Any"},
-      "output_types": {},
-      "input_defaults": {}
-    },
-    "points_out": {
-      "id": "points_out",
-      "type": "Output",
-      "params": {"label": "point-cloud stream contract"},
-      "pos": [930, 760],
       "inputs": ["value"],
       "outputs": [],
       "input_types": {"value": "Any"},
@@ -344,12 +334,6 @@
       "from": "depth",
       "from_port": "depth_stream",
       "to": "contracts_out",
-      "to_port": "value"
-    },
-    {
-      "from": "depth",
-      "from_port": "point_cloud_stream",
-      "to": "points_out",
       "to_port": "value"
     }
   ]

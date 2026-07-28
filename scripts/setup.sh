@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WS_DIR="$ROOT_DIR/ros2_ws"
+WS_DIR="$ROOT_DIR/components/camera/adapters/ros2/ros2_ws"
 
 source_setup() {
   local setup_file="$1"

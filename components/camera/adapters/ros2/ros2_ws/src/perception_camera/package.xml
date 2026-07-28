@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>perception_camera</name>
-  <version>0.1.0</version>
-  <description>Generic USB camera publisher for Blacknode Vision workflows.</description>
+  <version>0.2.0</version>
+  <description>Blacknode ROS 2 publishers for USB and RGB-D cameras.</description>
   <maintainer email="temiroff@gmail.com">Blacknode</maintainer>
   <license>Apache-2.0</license>
 

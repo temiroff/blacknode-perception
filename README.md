@@ -58,13 +58,15 @@ Restart Blacknode, or press **Reload** in the editor's Packages tab.
 
 | Package | Executable | What it does |
 |---|---|---|
-| `perception_camera` | `usb_camera` | Publishes a local USB camera to `/camera/image_raw` |
+| `perception_camera` | `usb_camera` | Publishes a local USB camera plus camera information |
+| `perception_camera` | `rgbd_camera` | Publishes synchronized RGB and metric-depth inputs |
 
 The USB camera node accepts ROS parameters:
 
 ```text
 device:=0
 image_topic:=/camera/image_raw
+camera_info_topic:=/camera/camera_info
 width:=640
 height:=480
 hz:=30.0
@@ -76,7 +78,7 @@ rotation:=0
 | Node | What it does |
 |---|---|
 | `Camera` | Discovers, selects, and streams one local camera with a live preview; duplicate it for more cameras |
-| `CameraROS2Provider` | Starts, stops, or inspects a managed USB, ROSOrin RGB-D, custom-launch, or existing-topic provider and verifies its declared topic group |
+| `CameraROS2Provider` | Starts, stops, or inspects a managed USB, Blacknode RGB-D, custom-launch, or existing-topic provider and verifies its declared topic group |
 | `CameraROS2Subscribe` | Streams a raw or compressed ROS 2 color-image topic into the editor |
 | `DepthROS2Subscribe` | Previews `16UC1`/`32FC1` depth while preserving metric depth and optional point-cloud contracts |
 | `CameraCalibration` | Captures checkerboard views, solves intrinsics and field of view, and emits a calibrated camera stream |
@@ -92,20 +94,25 @@ rotation:=0
 
 ## Managed RGB-D camera
 
-Use the **ROSOrin RGB-D Camera** template to start the ROSOrin
-`peripherals depth_camera.launch.py` provider and open color plus depth
-previews. Its default live interfaces are:
+Use the **Blacknode RGB-D Camera** template to start the bundled
+`perception_camera rgbd_camera.launch.py` provider and open color plus depth
+previews. Set `rgb_device` and `depth_device` to the video inputs exposed by
+the attached hardware. Its default live interfaces are:
 
-- RGB image: `/depth_cam/rgb0/image_raw`
-- RGB camera info: `/depth_cam/rgb0/camera_info`
-- metric depth: `/depth_cam/depth0/image_raw`
-- depth camera info: `/depth_cam/depth0/camera_info`
-- point cloud: `/depth_cam/depth0/points`
+- RGB image: `/camera/rgb/image_raw`
+- RGB camera info: `/camera/rgb/camera_info`
+- metric depth: `/camera/depth/image_raw`
+- depth camera info: `/camera/depth/camera_info`
 
 The depth preview applies display-only percentile scaling. Downstream nodes
 continue to receive the original metric encoding and `depth_scale`, so SLAM,
 obstacle avoidance, dataset recording, and policy workflows do not consume the
 visualized JPEG as sensor data.
+
+The RGB-D publisher accepts only `16UC1` or `32FC1` metric depth. It reports an
+actionable warning when the selected depth input supplies ordinary 8-bit color
+frames. Point clouds remain an optional downstream capability once calibrated
+intrinsics and RGB-to-depth extrinsics are available.
 
 ## Camera calibration
 

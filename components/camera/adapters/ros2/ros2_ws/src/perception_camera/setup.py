@@ -6,7 +6,7 @@ package_name = "perception_camera"
 
 setup(
     name=package_name,
-    version="0.1.0",
+    version="0.2.0",
     packages=find_packages(exclude=["test"]),
     data_files=[
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
@@ -17,11 +17,12 @@ setup(
     zip_safe=True,
     maintainer="Blacknode",
     maintainer_email="temiroff@gmail.com",
-    description="Generic USB camera publisher for Blacknode Vision workflows.",
+    description="Blacknode ROS 2 publishers for USB and RGB-D cameras.",
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
             "usb_camera = perception_camera.usb_camera:main",
+            "rgbd_camera = perception_camera.rgbd_camera:main",
         ],
     },
 )
