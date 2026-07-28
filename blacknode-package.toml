@@ -57,12 +57,12 @@ requires = [{ package = "blacknode-perception", component = "camera", version = 
 
 [components.depth]
 description = "Depth frames, alignment, validity, and deprojection contracts."
-default = false
+default = true
 capabilities = ["perception.depth"]
 
 [components.depth.adapters.ros2]
 description = "Metric depth-image and point-cloud capability over ROS 2."
-default = false
+default = true
 capabilities = ["adapter.perception.depth.ros2"]
 nodes = ["components/depth/adapters/ros2/nodes"]
 templates = ["components/depth/adapters/ros2/templates"]
