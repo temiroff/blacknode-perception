@@ -29,6 +29,19 @@ class _LazyRos2Runtime:
 rt = _LazyRos2Runtime()
 
 _CATEGORY = "Perception"
+_PROVIDER_PROFILES = {
+    "existing_topics",
+    "usb_cam",
+    "blacknode_rgbd",
+    "custom_launch",
+}
+
+
+def _provider_profile(ctx: dict) -> str:
+    profile = str(ctx.get("profile") or "existing_topics").strip().lower()
+    if profile not in _PROVIDER_PROFILES and bool(ctx.get("require_depth")):
+        return "blacknode_rgbd"
+    return profile
 
 
 def _service_id(value: object) -> str:
@@ -40,9 +53,7 @@ def _service_id(value: object) -> str:
 
 
 def _camera_interfaces(ctx: dict) -> list[dict]:
-    rgbd = (
-        str(ctx.get("profile") or "").strip().lower() == "blacknode_rgbd"
-    )
+    rgbd = _provider_profile(ctx) == "blacknode_rgbd"
     rgb_default = "/camera/rgb/image_raw" if rgbd else "/camera/image_raw"
     rgb_info_default = (
         "/camera/rgb/camera_info" if rgbd else "/camera/camera_info"
@@ -99,7 +110,7 @@ def _camera_interfaces(ctx: dict) -> list[dict]:
 
 
 def _provider_command(ctx: dict) -> tuple[list[str], str]:
-    profile = str(ctx.get("profile") or "existing_topics").strip().lower()
+    profile = _provider_profile(ctx)
     try:
         extra = shlex.split(str(ctx.get("arguments") or ""))
     except ValueError as exc:
@@ -181,7 +192,7 @@ def _provider_command(ctx: dict) -> tuple[list[str], str]:
 )
 def ros2_camera_provider(ctx: dict) -> dict:
     run_id = _service_id(ctx.get("run_id"))
-    profile = str(ctx.get("profile") or "existing_topics").strip().lower()
+    profile = _provider_profile(ctx)
     action = str(ctx.get("action") or "status").strip().lower()
     command, command_error = _provider_command(ctx)
     base = {
