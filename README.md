@@ -150,7 +150,7 @@ Docker required). For a different camera index, edit the node's `selection`
 input.
 
 CV2 color-object tracking and follow-target templates (cube/target tracking,
-ROS 2 or rosbridge robot control) live in `blacknode-skills`' `follow-person`
+ROS 2 or rosbridge robot control) live in `blacknode-skills`' `follow`
 component now, not here.
 
 ## VLM and LLM endpoints
