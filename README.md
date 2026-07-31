@@ -81,6 +81,10 @@ rotation:=0
 | `CameraROS2Provider` | Starts, stops, or inspects a managed USB, Blacknode RGB-D, custom-launch, or existing-topic provider and verifies its declared topic group |
 | `CameraROS2Subscribe` | Streams a raw or compressed ROS 2 color-image topic into the editor |
 | `DepthROS2Subscribe` | Previews `16UC1`/`32FC1` depth while preserving metric depth and optional point-cloud contracts |
+| `DepthCamera` | Normalizes mock, replay, ROS 2, or future SDK providers into one stable depth-camera capability |
+| `DepthCameraDeviceSelect` | Selects a discovered depth camera from a registered compute device and requires confirmation before live start |
+| `DepthCameraTestProvider` | Generates deterministic mock depth or replays a recorded depth contract for hardware-free development |
+| `DepthObstacleWarning` | Reports clear, warning, critical, or fail-closed unknown state from fresh metric depth |
 | `CameraCalibration` | Captures checkerboard views, solves intrinsics and field of view, and emits a calibrated camera stream |
 | `FramePrompt` | Builds a concise robot-vision prompt for one camera frame |
 | `DetectionPrompt` | Builds an LLM prompt from CV2 detections for local reasoning |
@@ -108,6 +112,12 @@ The depth preview applies display-only percentile scaling. Downstream nodes
 continue to receive the original metric encoding and `depth_scale`, so SLAM,
 obstacle avoidance, dataset recording, and policy workflows do not consume the
 visualized JPEG as sensor data.
+
+The ROS 2 image helper also reports bounded raw-depth statistics. The depth
+adapter converts them to metres and reports source freshness separately from
+worker-process health. Connect its `preview`, `depth_stream`,
+`point_cloud_stream`, and `health` outputs to `DepthCamera` so downstream
+features stay provider-neutral.
 
 The RGB-D publisher accepts only `16UC1` or `32FC1` metric depth. It reports an
 actionable warning when the selected depth input supplies ordinary 8-bit color
@@ -139,6 +149,12 @@ metadata for later replay, simulation, and training workflows.
 
 ## Templates
 
+- **Depth Camera Component Lab** — test depth behavior with mock or replay
+  data, inspect freshness and obstacle state, and prepare a generic robot
+  attachment and unsaved profile artifact.
+- **Depth Camera on Device** — select a registered compute device, resolve its
+  inspected depth topic, explicitly confirm it, consume real ROS 2 metric
+  depth, and prepare the corresponding attachment/profile artifact.
 - **Camera Console** — start the local camera, stream it live, and show a
   status dashboard.
 - **Live VLM Reasoning** — start the local camera, keep the live stream

@@ -181,7 +181,9 @@
         "host": "0.0.0.0",
         "max_fps": 10.0,
         "max_width": 960,
-        "jpeg_quality": 82
+        "jpeg_quality": 82,
+        "stale_after_seconds": 2.0,
+        "health_wait_seconds": 2.0
       },
       "pos": [500, 430],
       "inputs": [
@@ -198,7 +200,9 @@
         "port",
         "max_fps",
         "max_width",
-        "jpeg_quality"
+        "jpeg_quality",
+        "stale_after_seconds",
+        "health_wait_seconds"
       ],
       "outputs": [
         "preview",
@@ -209,6 +213,7 @@
         "stream_id",
         "depth_stream",
         "point_cloud_stream",
+        "health",
         "report"
       ],
       "input_types": {
@@ -225,7 +230,9 @@
         "port": "Int",
         "max_fps": "Float",
         "max_width": "Int",
-        "jpeg_quality": "Int"
+        "jpeg_quality": "Int",
+        "stale_after_seconds": "Float",
+        "health_wait_seconds": "Float"
       },
       "output_types": {
         "preview": "Image",
@@ -236,6 +243,7 @@
         "stream_id": "Text",
         "depth_stream": "Dict",
         "point_cloud_stream": "Dict",
+        "health": "Dict",
         "report": "Text"
       },
       "input_defaults": {
@@ -251,7 +259,9 @@
         "port": 0,
         "max_fps": 10.0,
         "max_width": 960,
-        "jpeg_quality": 80
+        "jpeg_quality": 80,
+        "stale_after_seconds": 2.0,
+        "health_wait_seconds": 2.0
       }
     },
     "rgb_out": {

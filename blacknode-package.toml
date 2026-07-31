@@ -1,6 +1,6 @@
 [package]
 name = "blacknode-perception"
-version = "0.3.3"
+version = "0.3.5"
 description = "Camera, tracking, VLM, and spatial-perception capabilities organized as selectable components."
 requires-blacknode = ">=0.3.0"
 layer = "perception"
@@ -56,9 +56,15 @@ node-types = [
 requires = [{ package = "blacknode-perception", component = "camera", version = ">=0.2.0,<1.0.0" }]
 
 [components.depth]
-description = "Depth frames, alignment, validity, and deprojection contracts."
+description = "Provider-neutral depth-camera contracts, mock/replay testing, health, and safe obstacle assessment."
 default = true
 capabilities = ["perception.depth"]
+nodes = ["components/depth/nodes"]
+templates = ["components/depth/templates"]
+node-types = [
+  "DepthCamera", "DepthCameraDeviceSelect", "DepthCameraTestProvider",
+  "DepthObstacleWarning"
+]
 
 [components.depth.adapters.ros2]
 description = "Metric depth-image and point-cloud capability over ROS 2."

@@ -1,6 +1,12 @@
 """Managed ROS 2 depth-image preview and metric stream contracts."""
 from __future__ import annotations
 
+import json
+import math
+import time
+import urllib.error
+import urllib.request
+
 from blacknode import contracts as bn_contracts
 from blacknode.node import Any as AnyPort
 from blacknode.node import Bool, Dict, Enum, Float, Image, Int, Text, node
@@ -27,8 +33,123 @@ def _blank(stream_id: str, report: str) -> dict:
         "stream_id": stream_id,
         "depth_stream": {},
         "point_cloud_stream": {},
+        "health": {
+            "state": "unavailable",
+            "worker_alive": False,
+            "source_fresh": False,
+            "frames": 0,
+            "age_seconds": None,
+            "summary_m": {},
+            "error": report,
+        },
         "report": report,
     }
+
+
+def _metric_health(
+    payload: dict,
+    *,
+    depth_scale: float,
+    stale_after_seconds: float,
+) -> dict:
+    metadata = (
+        payload.get("metadata")
+        if isinstance(payload.get("metadata"), dict)
+        else {}
+    )
+    raw_summary = (
+        metadata.get("depth_summary_raw")
+        if isinstance(metadata.get("depth_summary_raw"), dict)
+        else {}
+    )
+    encoding = str(
+        raw_summary.get("encoding")
+        or metadata.get("encoding")
+        or ""
+    ).strip()
+    scale = 1.0 if encoding.lower() == "32fc1" else max(0.0, depth_scale)
+    summary_m: dict[str, float | int] = {}
+    for name in ("minimum", "p05", "median", "p95"):
+        try:
+            value = float(raw_summary.get(name))
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(value):
+            summary_m[name] = value * scale
+    for name in ("valid_count", "total_count"):
+        try:
+            summary_m[name] = max(0, int(raw_summary.get(name)))
+        except (TypeError, ValueError):
+            continue
+    received_at_ns = int(metadata.get("received_at_ns") or 0)
+    age_seconds = (
+        max(0.0, (time.time_ns() - received_at_ns) / 1_000_000_000.0)
+        if received_at_ns > 0
+        else None
+    )
+    frames = max(0, int(payload.get("frames") or 0))
+    error = str(payload.get("error") or "").strip()
+    worker_alive = not error
+    source_fresh = bool(
+        frames > 0
+        and age_seconds is not None
+        and age_seconds <= max(0.1, stale_after_seconds)
+    )
+    state = (
+        "error"
+        if error
+        else "ready"
+        if source_fresh and summary_m.get("valid_count", 0) > 0
+        else "stale"
+        if frames > 0
+        else "waiting"
+    )
+    return {
+        "state": state,
+        "worker_alive": worker_alive,
+        "source_fresh": source_fresh,
+        "frames": frames,
+        "age_seconds": age_seconds,
+        "encoding": encoding,
+        "frame_id": str(metadata.get("frame_id") or ""),
+        "summary_m": summary_m,
+        "error": error,
+    }
+
+
+def _read_stream_health(url: str, wait_seconds: float) -> dict:
+    clean_url = str(url or "").strip()
+    if not clean_url:
+        return {}
+    deadline = time.monotonic() + max(0.0, min(10.0, wait_seconds))
+    while True:
+        try:
+            request = urllib.request.Request(
+                clean_url,
+                headers={"Accept": "application/json"},
+            )
+            with urllib.request.urlopen(request, timeout=1.0) as response:
+                raw = response.read(128 * 1024 + 1)
+            if len(raw) > 128 * 1024:
+                return {"error": "depth health response exceeded 128 KB"}
+            payload = json.loads(raw.decode("utf-8"))
+            if isinstance(payload, dict):
+                if int(payload.get("frames") or 0) > 0:
+                    return payload
+                latest = payload
+            else:
+                latest = {"error": "depth health response was not an object"}
+        except (
+            OSError,
+            TimeoutError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            urllib.error.URLError,
+        ) as exc:
+            latest = {"error": f"{type(exc).__name__}: {exc}"}
+        if time.monotonic() >= deadline:
+            return latest
+        time.sleep(0.1)
 
 
 @node(
@@ -54,6 +175,8 @@ def _blank(stream_id: str, report: str) -> dict:
         "max_fps": Float(default=10.0),
         "max_width": Int(default=960),
         "jpeg_quality": Int(default=80),
+        "stale_after_seconds": Float(default=2.0),
+        "health_wait_seconds": Float(default=2.0),
     },
     outputs={
         "preview": Image,
@@ -64,6 +187,7 @@ def _blank(stream_id: str, report: str) -> dict:
         "stream_id": Text,
         "depth_stream": Dict,
         "point_cloud_stream": Dict,
+        "health": Dict,
         "report": Text,
     },
 )
@@ -103,6 +227,10 @@ def ros2_depth_stream(ctx: dict) -> dict:
     frame_id = str(ctx.get("frame_id") or "depth_camera_link").strip()
     requested_encoding = str(ctx.get("encoding") or "auto").strip()
     depth_scale = max(0.0, float(ctx.get("depth_scale") or 0.001))
+    stale_after_seconds = max(
+        0.1,
+        float(ctx.get("stale_after_seconds") or 2.0),
+    )
 
     if ctx.get("__run_mode__") == "once":
         shot = rt.capture_image_snapshot(
@@ -135,6 +263,19 @@ def ros2_depth_stream(ctx: dict) -> dict:
             encoding=encoding or "16UC1",
             depth_scale=depth_scale,
         )
+        health = _metric_health(
+            {
+                "frames": 1,
+                "metadata": metadata,
+                "error": "",
+            },
+            depth_scale=depth_scale,
+            stale_after_seconds=stale_after_seconds,
+        )
+        result["health"] = health
+        result["depth_stream"]["health"] = health
+        if health["summary_m"]:
+            result["depth_stream"]["summary_m"] = health["summary_m"]
         return result
 
     started = rt.start_image_stream(
@@ -169,6 +310,18 @@ def ros2_depth_stream(ctx: dict) -> dict:
         "topic": topic,
         "camera_info_topic": str(ctx.get("camera_info_topic") or "").strip(),
     })
+    health_payload = _read_stream_health(
+        health_url,
+        max(0.0, float(ctx.get("health_wait_seconds") or 0.0)),
+    )
+    health = _metric_health(
+        health_payload,
+        depth_scale=depth_scale,
+        stale_after_seconds=stale_after_seconds,
+    )
+    depth["health"] = health
+    if health["summary_m"]:
+        depth["summary_m"] = health["summary_m"]
     points_topic = str(ctx.get("points_topic") or "").strip()
     points = (
         bn_contracts.point_cloud_stream(
@@ -189,8 +342,10 @@ def ros2_depth_stream(ctx: dict) -> dict:
         "stream_id": stream_id,
         "depth_stream": depth,
         "point_cloud_stream": points,
+        "health": health,
         "report": (
-            f"LIVE DEPTH running on {stream_url} from {topic}; metric data "
-            f"remains on ROS 2 with scale {depth_scale:g}"
+            f"LIVE DEPTH running on {stream_url} from {topic}; "
+            f"source {health['state']}; metric data remains on ROS 2 with "
+            f"scale {depth_scale:g}"
         ),
     }
