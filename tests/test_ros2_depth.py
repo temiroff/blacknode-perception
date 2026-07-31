@@ -40,6 +40,7 @@ def test_depth_node_is_registered_to_depth_adapter():
 
 
 def test_depth_stream_preserves_metric_contract_and_preview(monkeypatch):
+    depth_node = _NODE_REGISTRY["DepthROS2Subscribe"]
     monkeypatch.setattr(rt, "inspect_topic_interfaces", lambda items: {
         "ok": True,
         "ready": True,
@@ -54,8 +55,30 @@ def test_depth_stream_preserves_metric_contract_and_preview(monkeypatch):
         "snapshot_url": "http://127.0.0.1:9015/snapshot.jpg",
         "health_url": "http://127.0.0.1:9015/health.json",
     })
+    monkeypatch.setitem(
+        depth_node.__globals__,
+        "_read_stream_health",
+        lambda url, wait_seconds: {
+            "frames": 4,
+            "metadata": {
+                "encoding": "16UC1",
+                "frame_id": "depth_frame",
+                "received_at_ns": depth_node.__globals__["time"].time_ns(),
+                "depth_summary_raw": {
+                    "encoding": "16UC1",
+                    "valid_count": 100,
+                    "total_count": 120,
+                    "minimum": 450.0,
+                    "p05": 500.0,
+                    "median": 1200.0,
+                    "p95": 3000.0,
+                },
+            },
+            "error": "",
+        },
+    )
 
-    result = _NODE_REGISTRY["DepthROS2Subscribe"]({
+    result = depth_node({
         "topic": "/depth_cam/depth0/image_raw",
         "camera_info_topic": "/depth_cam/depth0/camera_info",
         "points_topic": "/depth_cam/depth0/points",
@@ -70,6 +93,9 @@ def test_depth_stream_preserves_metric_contract_and_preview(monkeypatch):
     assert result["depth_stream"]["topic"] == "/depth_cam/depth0/image_raw"
     assert result["depth_stream"]["encoding"] == "16UC1"
     assert result["depth_stream"]["depth_scale"] == 0.001
+    assert result["depth_stream"]["summary_m"]["p05"] == 0.5
+    assert result["health"]["state"] == "ready"
+    assert result["health"]["source_fresh"] is True
     assert result["point_cloud_stream"]["kind"] == (
         "blacknode.point-cloud-stream"
     )
