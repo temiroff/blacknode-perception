@@ -121,7 +121,7 @@ def _topic_evidence(candidate: dict, suffix: str, role: str) -> str:
     category=_CATEGORY,
     description=(
         "Select and explicitly confirm a generic depth-camera candidate from "
-        "a ComputeDevice ROS 2 inspection snapshot."
+        "current ROS 2 state from a paired ComputeDevice Runtime."
     ),
     inputs={
         "device": Dict,
