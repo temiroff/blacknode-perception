@@ -59,7 +59,7 @@ ComputeDevice → DeviceInspect → DepthCameraDeviceSelect
 ```
 
 Choose the registered computer on `ComputeDevice` and press **Run once**.
-`DepthCameraDeviceSelect` reads the saved generic ROS 2 capability candidate
+`DepthCameraDeviceSelect` reads the current generic ROS 2 capability candidate
 and fills the raw depth and camera-info topics. It defaults to `confirm=false`,
 so the first run remains read-only and keeps the stream stopped.
 
@@ -70,9 +70,9 @@ graph directly. To execute inside the selected Jetson or robot computer, pair
 Blacknode Runtime, open **Deployments**, select the attached robot, choose
 **Check setup**, then **Send & run on robot**.
 
-The compute-device node carries selection and inspection data. It does not
-proxy live ROS 2 frames through an inspection-only SSH connection. A paired
-Runtime or direct DDS visibility supplies the live data path.
+The compute-device node carries stable selection and current read-only ROS
+state from the paired Runtime. `DepthROS2Subscribe` supplies the managed live
+frame path on the target device or through direct DDS visibility.
 
 ## Provider contract
 

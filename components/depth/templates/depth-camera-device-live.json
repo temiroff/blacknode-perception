@@ -9,7 +9,7 @@
   },
   "metadata": {
     "template": true,
-    "description": "Select a registered compute device, review its read-only ROS 2 depth-camera discovery, explicitly confirm the real metric-depth topic, preview fresh depth, assess obstacles, and prepare an unsaved robot attachment/profile.",
+    "description": "Select a registered compute device, read its current ROS 2 depth-camera state through the paired Runtime, explicitly confirm the real metric-depth topic, preview fresh depth, assess obstacles, and prepare an unsaved robot attachment/profile.",
     "color": "#0ea5e9",
     "required_packages": [
       "blacknode-robot",
