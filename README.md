@@ -1,10 +1,10 @@
 # blacknode-perception
 
-**Robot vision nodes for [Blacknode](https://github.com/temiroff/Blacknode).**
+**Robot perception nodes for [Blacknode](https://github.com/temiroff/Blacknode).**
 
 Install this Blacknode **extension package** to add robot vision to the visual
 workflow editor: run USB cameras,
-stream ROS 2 images, inspect VLM reasoning, track objects with OpenCV, and
+stream ROS 2 images and LiDAR scans, inspect VLM reasoning, track objects with OpenCV, and
 drive it all from workflows or AI agents over MCP.
 
 It composes with `blacknode-ros2`: that package provides the ROS 2 graph,
@@ -85,6 +85,10 @@ rotation:=0
 | `DepthCameraDeviceSelect` | Selects a discovered depth camera from a registered compute device and requires confirmation before live start |
 | `DepthCameraTestProvider` | Generates deterministic mock depth or replays a recorded depth contract for hardware-free development |
 | `DepthObstacleWarning` | Reports clear, warning, critical, or fail-closed unknown state from fresh metric depth |
+| `LiDARTestProvider` | Generates a deterministic room scan or replays a normalized LaserScan for hardware-free development |
+| `LiDAR` | Normalizes mock, replay, and ROS 2 providers into one stable LiDAR capability and attachment configuration |
+| `LiDARROS2Scan` | Captures and normalizes one `sensor_msgs/msg/LaserScan` from `/scan` or another configured topic |
+| `LiDARROS2WarpViewer` | Manages a native ROS 2 subscription displayed through the Warp OpenGL development viewer |
 | `CameraCalibration` | Captures checkerboard views, solves intrinsics and field of view, and emits a calibrated camera stream |
 | `FramePrompt` | Builds a concise robot-vision prompt for one camera frame |
 | `DetectionPrompt` | Builds an LLM prompt from CV2 detections for local reasoning |
@@ -149,6 +153,10 @@ metadata for later replay, simulation, and training workflows.
 
 ## Templates
 
+- **LiDAR Warp Static Lab** — generate one room-like scan, run the Warp
+  filtering/transform kernel, and optionally open the raw/filtered OpenGL view.
+- **ROS 2 LiDAR Warp Live Viewer** — confirm one real `/scan` message, inspect
+  the processed point result, and explicitly start the managed live viewer.
 - **Depth Camera Component Lab** — test depth behavior with mock or replay
   data, inspect freshness and obstacle state, and prepare a generic robot
   attachment and unsaved profile artifact.

@@ -1,0 +1,54 @@
+{
+  "kind": "blacknode.workflow",
+  "schema_version": 1,
+  "name": "ROS 2 LiDAR Warp Live Viewer",
+  "saved_at": "2026-08-02T00:00:00",
+  "entrypoint": {"node_id": "result", "port": "value"},
+  "metadata": {
+    "template": true,
+    "description": "Confirm one /scan message, then explicitly start a native ROS 2 Warp OpenGL viewer with raw gray and filtered cyan LiDAR points.",
+    "color": "#76b900",
+    "required_packages": ["blacknode-perception", "blacknode-ros2", "blacknode-cuda"]
+  },
+  "node_meta": {
+    "capture": {
+      "id": "capture", "type": "LiDARROS2Scan", "pos": [100, 120],
+      "params": {"topic": "/scan", "timeout_seconds": 10.0, "hardware_id": ""},
+      "inputs": ["topic", "timeout_seconds", "hardware_id"],
+      "outputs": ["captured", "provider_state", "laser_scan", "health", "hardware", "report"],
+      "input_types": {"topic": "Text", "timeout_seconds": "Float", "hardware_id": "Text"},
+      "output_types": {"captured": "Bool", "provider_state": "Dict", "laser_scan": "Dict", "health": "Dict", "hardware": "Dict", "report": "Text"},
+      "input_defaults": {"topic": "/scan", "timeout_seconds": 10.0, "hardware_id": ""}
+    },
+    "warp": {
+      "id": "warp", "type": "WarpLaserScanFilter", "pos": [460, 80],
+      "params": {"device": "cuda:0", "filter_min_m": 0.1, "filter_max_m": 12.0, "downsample_stride": 1, "sensor_x_m": 0.0, "sensor_y_m": 0.0, "sensor_yaw_rad": 0.0},
+      "inputs": ["laser_scan", "device", "filter_min_m", "filter_max_m", "downsample_stride", "sensor_x_m", "sensor_y_m", "sensor_yaw_rad"],
+      "outputs": ["ok", "raw_points", "filtered_points", "colors", "point_cloud", "raw_count", "filtered_count", "device", "kernel_ms", "report"],
+      "input_types": {"laser_scan": "Dict", "device": "Text", "filter_min_m": "Float", "filter_max_m": "Float", "downsample_stride": "Int", "sensor_x_m": "Float", "sensor_y_m": "Float", "sensor_yaw_rad": "Float"},
+      "output_types": {"ok": "Bool", "raw_points": "List", "filtered_points": "List", "colors": "List", "point_cloud": "Dict", "raw_count": "Int", "filtered_count": "Int", "device": "Text", "kernel_ms": "Float", "report": "Dict"},
+      "input_defaults": {"device": "cuda:0", "filter_min_m": 0.1, "filter_max_m": 12.0, "downsample_stride": 1, "sensor_x_m": 0.0, "sensor_y_m": 0.0, "sensor_yaw_rad": 0.0}
+    },
+    "viewer": {
+      "id": "viewer", "type": "LiDARROS2WarpViewer", "pos": [460, 390],
+      "params": {"action": "stop", "topic": "/scan", "viewer_id": "front_lidar_warp", "device": "cuda:0", "filter_min_m": 0.1, "filter_max_m": 12.0, "downsample_stride": 1, "sensor_x_m": 0.0, "sensor_y_m": 0.0, "sensor_yaw_rad": 0.0, "show_raw": true, "show_filtered": true, "point_radius_m": 0.025, "fps": 30},
+      "inputs": ["action", "topic", "viewer_id", "device", "filter_min_m", "filter_max_m", "downsample_stride", "sensor_x_m", "sensor_y_m", "sensor_yaw_rad", "show_raw", "show_filtered", "point_radius_m", "fps"],
+      "outputs": ["running", "source_ready", "viewer", "report"],
+      "input_types": {"action": "Text", "topic": "Text", "viewer_id": "Text", "device": "Text", "filter_min_m": "Float", "filter_max_m": "Float", "downsample_stride": "Int", "sensor_x_m": "Float", "sensor_y_m": "Float", "sensor_yaw_rad": "Float", "show_raw": "Bool", "show_filtered": "Bool", "point_radius_m": "Float", "fps": "Int"},
+      "output_types": {"running": "Bool", "source_ready": "Bool", "viewer": "Dict", "report": "Text"},
+      "input_defaults": {"action": "stop", "topic": "/scan", "viewer_id": "front_lidar_warp", "device": "cuda:0", "filter_min_m": 0.1, "filter_max_m": 12.0, "downsample_stride": 1, "sensor_x_m": 0.0, "sensor_y_m": 0.0, "sensor_yaw_rad": 0.0, "show_raw": true, "show_filtered": true, "point_radius_m": 0.025, "fps": 30}
+    },
+    "result": {
+      "id": "result", "type": "List", "pos": [830, 170], "params": {},
+      "inputs": ["item_1", "item_2", "item_3"], "outputs": ["value"],
+      "input_types": {"item_1": "Any", "item_2": "Any", "item_3": "Any"},
+      "output_types": {"value": "List"}, "input_defaults": {}
+    }
+  },
+  "edges": [
+    {"from": "capture", "from_port": "laser_scan", "to": "warp", "to_port": "laser_scan"},
+    {"from": "capture", "from_port": "health", "to": "result", "to_port": "item_1"},
+    {"from": "warp", "from_port": "report", "to": "result", "to_port": "item_2"},
+    {"from": "viewer", "from_port": "viewer", "to": "result", "to_port": "item_3"}
+  ]
+}
