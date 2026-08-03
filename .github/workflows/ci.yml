@@ -41,6 +41,7 @@ jobs:
           if [ -f package/requirements.txt ]; then
             python -m pip install -r package/requirements.txt
           fi
+          python -m pip install "warp-lang>=1.15,<2" "pyglet>=2.0"
       - name: Link package into Blacknode
         shell: bash
         run: |

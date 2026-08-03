@@ -1,0 +1,68 @@
+{
+  "kind": "blacknode.workflow",
+  "schema_version": 1,
+  "name": "LiDAR Warp Static Lab",
+  "saved_at": "2026-08-02T00:00:00",
+  "entrypoint": {"node_id": "result", "port": "value"},
+  "metadata": {
+    "template": true,
+    "description": "Generate one deterministic room scan, process it with a Warp kernel, and inspect raw and filtered point data before starting the OpenGL viewer.",
+    "color": "#76b900",
+    "required_packages": ["blacknode-perception", "blacknode-cuda"]
+  },
+  "node_meta": {
+    "scan": {
+      "id": "scan", "type": "LiDARTestProvider", "pos": [80, 180],
+      "params": {"mode": "mock", "provider_id": "lidar_lab", "hardware_id": "lidar-test-001", "frame_id": "laser", "sample_count": 360, "room_width_m": 6.0, "room_height_m": 4.0},
+      "inputs": ["mode", "provider_id", "hardware_id", "frame_id", "sample_count", "room_width_m", "room_height_m", "replay"],
+      "outputs": ["provider_state", "laser_scan", "health", "hardware", "report"],
+      "input_types": {"mode": "Text", "provider_id": "Text", "hardware_id": "Text", "frame_id": "Text", "sample_count": "Int", "room_width_m": "Float", "room_height_m": "Float", "replay": "Dict"},
+      "output_types": {"provider_state": "Dict", "laser_scan": "Dict", "health": "Dict", "hardware": "Dict", "report": "Text"},
+      "input_defaults": {"mode": "mock", "provider_id": "lidar_test", "hardware_id": "lidar-test-001", "frame_id": "laser", "sample_count": 360, "room_width_m": 6.0, "room_height_m": 4.0}
+    },
+    "lidar": {
+      "id": "lidar", "type": "LiDAR", "pos": [420, 180],
+      "params": {"attachment_id": "front_lidar", "topic": "/scan", "frame_id": "laser", "stale_after_seconds": 1.0},
+      "inputs": ["provider_state", "laser_scan", "health", "hardware", "attachment_id", "topic", "frame_id", "stale_after_seconds"],
+      "outputs": ["ready", "lidar", "laser_scan", "health", "hardware", "attachment_configuration", "report"],
+      "input_types": {"provider_state": "Dict", "laser_scan": "Dict", "health": "Dict", "hardware": "Dict", "attachment_id": "Text", "topic": "Text", "frame_id": "Text", "stale_after_seconds": "Float"},
+      "output_types": {"ready": "Bool", "lidar": "Dict", "laser_scan": "Dict", "health": "Dict", "hardware": "Dict", "attachment_configuration": "Dict", "report": "Text"},
+      "input_defaults": {"attachment_id": "front_lidar", "topic": "/scan", "frame_id": "laser", "stale_after_seconds": 1.0}
+    },
+    "warp": {
+      "id": "warp", "type": "WarpLaserScanFilter", "pos": [760, 120],
+      "params": {"device": "cpu", "filter_min_m": 0.1, "filter_max_m": 12.0, "downsample_stride": 2, "sensor_x_m": 0.0, "sensor_y_m": 0.0, "sensor_yaw_rad": 0.0},
+      "inputs": ["laser_scan", "device", "filter_min_m", "filter_max_m", "downsample_stride", "sensor_x_m", "sensor_y_m", "sensor_yaw_rad", "include_raw_points", "compare_numpy"],
+      "outputs": ["ok", "raw_points", "filtered_points", "colors", "point_cloud", "raw_count", "filtered_count", "device", "kernel_ms", "report"],
+      "input_types": {"laser_scan": "Dict", "device": "Text", "filter_min_m": "Float", "filter_max_m": "Float", "downsample_stride": "Int", "sensor_x_m": "Float", "sensor_y_m": "Float", "sensor_yaw_rad": "Float", "include_raw_points": "Bool", "compare_numpy": "Bool"},
+      "output_types": {"ok": "Bool", "raw_points": "List", "filtered_points": "List", "colors": "List", "point_cloud": "Dict", "raw_count": "Int", "filtered_count": "Int", "device": "Text", "kernel_ms": "Float", "report": "Dict"},
+      "input_defaults": {"device": "cuda:0", "filter_min_m": 0.1, "filter_max_m": 12.0, "downsample_stride": 1, "sensor_x_m": 0.0, "sensor_y_m": 0.0, "sensor_yaw_rad": 0.0, "include_raw_points": true, "compare_numpy": false}
+    },
+    "viewer": {
+      "id": "viewer", "type": "WarpLiDARViewer", "pos": [760, 420],
+      "params": {"action": "stop", "viewer_id": "warp_lidar_static", "device": "cuda:0", "filter_min_m": 0.1, "filter_max_m": 12.0, "downsample_stride": 2, "sensor_x_m": 0.0, "sensor_y_m": 0.0, "sensor_yaw_rad": 0.0, "show_raw": true, "show_filtered": true, "point_radius_m": 0.025, "fps": 30},
+      "inputs": ["action", "laser_scan", "viewer_id", "device", "filter_min_m", "filter_max_m", "downsample_stride", "sensor_x_m", "sensor_y_m", "sensor_yaw_rad", "show_raw", "show_filtered", "point_radius_m", "fps", "animate_scan", "scan_hz", "show_rays", "ray_trail_count", "accumulate_hits", "compare_numpy"],
+      "outputs": ["running", "viewer", "report"],
+      "input_types": {"action": "Text", "laser_scan": "Dict", "viewer_id": "Text", "device": "Text", "filter_min_m": "Float", "filter_max_m": "Float", "downsample_stride": "Int", "sensor_x_m": "Float", "sensor_y_m": "Float", "sensor_yaw_rad": "Float", "show_raw": "Bool", "show_filtered": "Bool", "point_radius_m": "Float", "fps": "Int", "animate_scan": "Bool", "scan_hz": "Float", "show_rays": "Bool", "ray_trail_count": "Int", "accumulate_hits": "Bool", "compare_numpy": "Bool"},
+      "output_types": {"running": "Bool", "viewer": "Dict", "report": "Text"},
+      "input_defaults": {"action": "stop", "viewer_id": "warp_lidar_static", "device": "cuda:0", "filter_min_m": 0.1, "filter_max_m": 12.0, "downsample_stride": 2, "sensor_x_m": 0.0, "sensor_y_m": 0.0, "sensor_yaw_rad": 0.0, "show_raw": true, "show_filtered": true, "point_radius_m": 0.025, "fps": 30, "animate_scan": true, "scan_hz": 0.25, "show_rays": true, "ray_trail_count": 96, "accumulate_hits": true, "compare_numpy": false}
+    },
+    "result": {
+      "id": "result", "type": "List", "pos": [1110, 180], "params": {},
+      "inputs": ["item_1", "item_2", "item_3"], "outputs": ["value"],
+      "input_types": {"item_1": "Any", "item_2": "Any", "item_3": "Any"},
+      "output_types": {"value": "List"}, "input_defaults": {}
+    }
+  },
+  "edges": [
+    {"from": "scan", "from_port": "provider_state", "to": "lidar", "to_port": "provider_state"},
+    {"from": "scan", "from_port": "laser_scan", "to": "lidar", "to_port": "laser_scan"},
+    {"from": "scan", "from_port": "health", "to": "lidar", "to_port": "health"},
+    {"from": "scan", "from_port": "hardware", "to": "lidar", "to_port": "hardware"},
+    {"from": "lidar", "from_port": "laser_scan", "to": "warp", "to_port": "laser_scan"},
+    {"from": "lidar", "from_port": "laser_scan", "to": "viewer", "to_port": "laser_scan"},
+    {"from": "warp", "from_port": "point_cloud", "to": "result", "to_port": "item_1"},
+    {"from": "warp", "from_port": "report", "to": "result", "to_port": "item_2"},
+    {"from": "viewer", "from_port": "viewer", "to": "result", "to_port": "item_3"}
+  ]
+}

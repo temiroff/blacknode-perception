@@ -1,6 +1,6 @@
 [package]
 name = "blacknode-perception"
-version = "0.3.5"
+version = "0.4.0"
 description = "Camera, tracking, VLM, and spatial-perception capabilities organized as selectable components."
 requires-blacknode = ">=0.3.0"
 layer = "perception"
@@ -80,9 +80,26 @@ requires = [
 ]
 
 [components.lidar]
-description = "LiDAR scan streams and diagnostics."
-default = false
+description = "Provider-neutral LiDAR scans, deterministic replay, health, and spatial-processing inputs."
+default = true
 capabilities = ["perception.lidar"]
+nodes = ["components/lidar/nodes"]
+templates = ["components/lidar/templates"]
+node-types = ["LiDAR", "LiDARTestProvider"]
+
+[components.lidar.adapters.ros2]
+description = "LaserScan capture and a native ROS 2 Warp OpenGL development viewer."
+default = true
+capabilities = ["adapter.perception.lidar.ros2"]
+nodes = ["components/lidar/adapters/ros2/nodes"]
+templates = ["components/lidar/adapters/ros2/templates"]
+node-types = ["LiDARROS2Scan", "LiDARROS2WarpViewer"]
+
+[components.lidar.adapters.ros2.dependencies]
+requires = [
+  { package = "blacknode-ros2", component = "core", version = ">=0.4.0,<1.0.0" },
+  { package = "blacknode-cuda", component = "spatial-processing", version = ">=0.3.0,<1.0.0" }
+]
 
 [components.imu]
 description = "IMU streams, filtering, and health contracts."
