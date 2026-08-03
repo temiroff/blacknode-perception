@@ -69,6 +69,7 @@ def test_lidar_ros2_nodes_register_to_adapter():
         assert fn._bn_package == "blacknode-perception"
         assert fn._bn_component == "lidar"
         assert fn._bn_adapter == "ros2"
+    assert _NODE_REGISTRY["LiDARROS2WarpViewer"]._bn_hidden is True
 
 
 def test_laser_scan_capture_normalizes_message(monkeypatch):

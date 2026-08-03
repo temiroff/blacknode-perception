@@ -171,6 +171,7 @@ def lidar_ros2_scan(ctx: dict) -> dict:
 
 @node(
     name="LiDARROS2WarpViewer",
+    hidden=True,
     category=_CATEGORY,
     description=(
         "Start or stop one native ROS 2 LaserScan subscription rendered through "

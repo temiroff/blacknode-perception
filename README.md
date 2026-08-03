@@ -20,7 +20,7 @@
 - `CameraCalibration` produces versioned intrinsics and a calibrated stream.
 - `CameraROS2Provider` and `CameraROS2Subscribe` manage ROS 2 camera sources.
 - `DepthCamera`, `DepthCameraTestProvider`, and `DepthObstacleWarning` normalize depth behavior.
-- `LiDAR`, `LiDARTestProvider`, `LiDARROS2Scan`, and `LiDARROS2WarpViewer` normalize and inspect scans.
+- `LiDAR`, `LiDARTestProvider`, and `LiDARROS2Scan` normalize and inspect scans.
 - `TrackingObject` serves annotated MJPEG, masks, snapshots, and latest detections.
 - `VLM`, `ReasoningStream`, and `ReasoningDashboard` support OpenAI-compatible, NVIDIA NIM, Anthropic, and local Ollama endpoints.
 
