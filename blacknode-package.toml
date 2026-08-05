@@ -1,6 +1,6 @@
 [package]
 name = "blacknode-perception"
-version = "0.5.0"
+version = "0.5.1"
 description = "Camera, tracking, VLM, and spatial-perception capabilities organized as selectable components."
 requires-blacknode = ">=0.3.0"
 layer = "perception"
@@ -19,7 +19,7 @@ capabilities = ["perception.camera", "perception.calibration", "perception.track
 nodes = ["components/camera/nodes"]
 module-root = true
 node-types = [
-  "Camera", "CameraCalibration", "CameraDiscovery", "CameraImageProcessor",
+  "Camera", "CameraCalibration", "CameraDiscovery", "CameraImageProcessor", "CameraViewer",
   "CameraSelect", "CameraStream"
 ]
 
@@ -60,7 +60,7 @@ capabilities = ["perception.depth"]
 nodes = ["components/depth/nodes"]
 templates = ["components/depth/templates"]
 node-types = [
-  "DepthCamera", "DepthCameraDeviceSelect", "DepthImageProcessor",
+  "DepthCamera", "DepthCameraDeviceSelect", "DepthImageProcessor", "DepthViewer",
   "DepthObstacleWarning"
 ]
 

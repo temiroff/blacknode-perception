@@ -5,7 +5,7 @@
   "saved_at": "2026-07-27T00:00:00",
   "entrypoint": {
     "node_id": "rgb_out",
-    "port": "image"
+    "port": "preview"
   },
   "metadata": {
     "template": true,
@@ -361,47 +361,71 @@
     },
     "rgb_out": {
       "id": "rgb_out",
-      "type": "OutputImage",
-      "params": {},
+      "type": "CameraViewer",
+      "params": {
+        "label": "RGB camera"
+      },
       "pos": [
         930,
         100
       ],
       "inputs": [
-        "image"
+        "source",
+        "health",
+        "label"
       ],
       "outputs": [
-        "image"
+        "preview",
+        "status",
+        "report"
       ],
       "input_types": {
-        "image": "Image"
+        "source": "Dict",
+        "health": "Dict",
+        "label": "Text"
       },
       "output_types": {
-        "image": "Image"
+        "preview": "Image",
+        "status": "Dict",
+        "report": "Text"
       },
-      "input_defaults": {}
+      "input_defaults": {
+        "label": "Camera"
+      }
     },
     "depth_out": {
       "id": "depth_out",
-      "type": "OutputImage",
-      "params": {},
+      "type": "DepthViewer",
+      "params": {
+        "label": "Metric depth"
+      },
       "pos": [
         930,
         430
       ],
       "inputs": [
-        "image"
+        "source",
+        "health",
+        "label"
       ],
       "outputs": [
-        "image"
+        "preview",
+        "status",
+        "report"
       ],
       "input_types": {
-        "image": "Image"
+        "source": "Dict",
+        "health": "Dict",
+        "label": "Text"
       },
       "output_types": {
-        "image": "Image"
+        "preview": "Image",
+        "status": "Dict",
+        "report": "Text"
       },
-      "input_defaults": {}
+      "input_defaults": {
+        "label": "Depth"
+      }
     },
     "contracts_out": {
       "id": "contracts_out",
@@ -690,15 +714,27 @@
     },
     {
       "from": "rgb_processor",
-      "from_port": "preview",
+      "from_port": "frame_stream",
       "to": "rgb_out",
-      "to_port": "image"
+      "to_port": "source"
     },
     {
       "from": "depth_processor",
-      "from_port": "preview",
+      "from_port": "depth_stream",
       "to": "depth_out",
-      "to_port": "image"
+      "to_port": "source"
+    },
+    {
+      "from": "rgb_processor",
+      "from_port": "health",
+      "to": "rgb_out",
+      "to_port": "health"
+    },
+    {
+      "from": "depth_processor",
+      "from_port": "health",
+      "to": "depth_out",
+      "to_port": "health"
     },
     {
       "from": "depth_processor",
