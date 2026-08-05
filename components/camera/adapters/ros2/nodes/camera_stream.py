@@ -283,173 +283,18 @@ def ros2_camera_provider(ctx: dict) -> dict:
 
 
 def _resolve_image_message_type(topic: str, requested: str) -> tuple[str, str]:
-    value = requested.strip().lower()
+    value = str(requested or "auto").strip().lower()
     if value in {"raw", "compressed"}:
         return value, ""
     result = rt.run_ros2(["topic", "type", topic], timeout=10)
     if not result.get("ok"):
-        # `ros2 topic type` only resolves topics with an active publisher/
-        # subscriber right now, and fails with an opaque "exited with code 1"
-        # (often no stderr) when nothing is publishing yet. Check topic list
-        # membership so the failure explains what to fix instead of just the
-        # bare exit code.
-        listing = rt.run_ros2(["topic", "list"], timeout=10)
-        known_topics = {
-            line.strip() for line in listing.get("stdout", "").splitlines() if line.strip()
-        } if listing.get("ok") else set()
-        if listing.get("ok") and topic not in known_topics:
-            return "", (
-                f"{topic} has no active publisher right now. Start a camera driver that "
-                f"publishes to {topic} (a Camera node, or the 'Camera Livestream' "
-                f"template) before starting the stream, or set 'topic' to a topic ros2 "
-                f"topic list already shows."
-            )
-        return "", result.get("error", "could not discover topic type")
-    types = [line.strip() for line in result.get("stdout", "").splitlines() if line.strip()]
-    if any("sensor_msgs/msg/CompressedImage" in line for line in types):
+        return "", str(result.get("error") or result.get("stderr") or "could not discover topic type")
+    advertised = " ".join(str(result.get("stdout") or "").split())
+    if "sensor_msgs/msg/CompressedImage" in advertised:
         return "compressed", ""
-    if any("sensor_msgs/msg/Image" in line for line in types):
+    if "sensor_msgs/msg/Image" in advertised:
         return "raw", ""
-    return "", f"{topic} is not a sensor_msgs Image topic (types: {', '.join(types) or 'none'})"
-
-
-@node(
-    name="CameraROS2Subscribe",
-    live=True,
-    category=_CATEGORY,
-    description="Live camera feed for a raw or compressed ROS 2 image topic. Go Live streams continuous MJPEG; a plain one-shot Run captures a single frame instead.",
-    inputs={
-        "trigger": AnyPort,
-        "action": Enum(["start", "stop"], default="start"),
-        "stream_id": Text(default="camera"),
-        "topic": Text(default="/camera/image_raw"),
-        "message_type": Enum(["auto", "raw", "compressed"], default="auto"),
-        "host": Text(default="127.0.0.1"),
-        "port": Int(default=0),
-        "max_fps": Float(default=10.0),
-        "max_width": Int(default=960),
-        "jpeg_quality": Int(default=80),
-    },
-    outputs={
-        "preview": Image,
-        "streaming": Bool,
-        "stream_url": Text,
-        "snapshot_url": Text,
-        "stream_id": Text,
-        "report": Text,
-        "frame_stream": Dict,
-    },
-)
-def ros2_image_stream(ctx: dict) -> dict:
-    stream_id = str(ctx.get("stream_id") or "camera").strip() or "camera"
-    action = str(ctx.get("action") or "start").strip().lower()
-    if action == "stop":
-        result = rt.stop_image_stream(stream_id)
-        return {
-            "preview": "",
-            "streaming": False,
-            "stream_url": "",
-            "snapshot_url": "",
-            "stream_id": stream_id,
-            "report": f"stopped {result.get('stopped', 0)} image stream(s)",
-        }
-
-    topic = str(ctx.get("topic") or "/camera/image_raw").strip()
-    message_type, error = _resolve_image_message_type(topic, str(ctx.get("message_type") or "auto"))
-    if error:
-        return {
-            "preview": "",
-            "streaming": False,
-            "stream_url": "",
-            "snapshot_url": "",
-            "stream_id": stream_id,
-            "report": f"image stream FAILED: {error}",
-        }
-
-    host = str(ctx.get("host") or "127.0.0.1").strip() or "127.0.0.1"
-    port = max(0, int(ctx.get("port") or 0))
-    max_fps = max(0.1, min(60.0, float(ctx.get("max_fps") or 10.0)))
-    max_width = max(0, int(ctx.get("max_width") or 960))
-    jpeg_quality = max(1, min(100, int(ctx.get("jpeg_quality") or 80)))
-
-    if ctx.get("__run_mode__") == "once":
-        # A one-shot Run has nothing to keep watching a persistent MJPEG URL,
-        # and leaving a background stream server running after it would leak.
-        # Return a single real frame instead; Go Live starts the live stream.
-        shot = rt.capture_image_snapshot(
-            topic=topic,
-            message_type=message_type,
-            timeout=max(1.0, 15.0),
-            output_format="jpeg",
-            jpeg_quality=jpeg_quality,
-        )
-        if not shot.get("ok"):
-            return {
-                "preview": "",
-                "streaming": False,
-                "stream_url": "",
-                "snapshot_url": "",
-                "stream_id": stream_id,
-                "report": f"image frame FAILED: {shot.get('error', 'unknown error')}",
-            }
-        metadata = dict(shot.get("metadata") or {})
-        return {
-            "preview": str(shot.get("image") or ""),
-            "streaming": False,
-            "stream_url": "",
-            "snapshot_url": "",
-            "stream_id": stream_id,
-            "report": (
-                f"captured one {metadata.get('width', '?')}x{metadata.get('height', '?')} "
-                f"{message_type} frame from {topic} — press Go Live for a continuous stream"
-            ),
-        }
-
-    result = rt.start_image_stream(
-        stream_id=stream_id,
-        topic=topic,
-        message_type=message_type,
-        host=host,
-        port=port,
-        max_fps=max_fps,
-        max_width=max_width,
-        jpeg_quality=jpeg_quality,
-    )
-    if not result.get("ok"):
-        return {
-            "preview": "",
-            "streaming": False,
-            "stream_url": "",
-            "snapshot_url": "",
-            "stream_id": stream_id,
-            "report": f"image stream FAILED: {result.get('error', 'unknown error')}",
-        }
-    stream_url = str(result["stream_url"])
-    snapshot_url = str(result["snapshot_url"])
-    report = (
-        f"LIVE STREAM running on {stream_url} from {topic} "
-        f"({message_type}, {max_fps:g} FPS max, width {max_width or 'source'})"
-    )
-    return {
-        "preview": stream_url,
-        "streaming": True,
-        "stream_url": stream_url,
-        "snapshot_url": snapshot_url,
-        "stream_id": stream_id,
-        "frame_stream": {
-            "kind": "blacknode.frame-stream",
-            "schema_version": 1,
-            "stream_id": stream_id,
-            "stream_url": stream_url,
-            "snapshot_url": snapshot_url,
-            "health_url": str(result.get("health_url") or ""),
-            "media_type": "image/jpeg",
-            "mode": "latest",
-            "clock": "unix_ns",
-            "topic": topic,
-        },
-        "report": report,
-    }
+    return "", f"{topic} is not a sensor_msgs image topic"
 
 
 @node(

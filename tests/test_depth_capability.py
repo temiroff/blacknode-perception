@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import blacknode  # noqa: F401
+from blacknode import contracts as bn_contracts
 from blacknode.node import _NODE_REGISTRY
 from blacknode.packages import _import_nodes_module, _tag_new_package_nodes
 from blacknode.workflow import run_workflow, validate_workflow
@@ -27,11 +28,34 @@ _tag_new_package_nodes(
 )
 
 
-def _camera(distance_m=1.2, **provider_inputs):
-    provider = _NODE_REGISTRY["DepthCameraTestProvider"]({
-        "distance_m": distance_m,
-        **provider_inputs,
+def _camera(distance_m=1.2):
+    samples = [distance_m, distance_m * 1.01, distance_m * 0.99]
+    summary = {
+        "minimum": min(samples),
+        "p05": min(samples),
+        "median": distance_m,
+        "p95": max(samples),
+        "valid_count": len(samples),
+        "total_count": len(samples),
+    }
+    depth = bn_contracts.depth_stream("camera_depth", encoding="32FC1", depth_scale=1.0)
+    depth.update({
+        "summary_m": summary,
+        "samples_m": samples,
+        "topic": "/camera/depth/image_raw",
+        "camera_info_topic": "/camera/depth/camera_info",
+        "calibration": {"kind": "blacknode.camera-calibration", "fx": 7.0},
+        "frame_source": {"kind": "blacknode.depth-frame-source", "transport": "inline"},
     })
+    health = {"state": "ready", "source_fresh": True, "summary_m": summary}
+    provider = {
+        "preview": "data:image/png;base64,AA==",
+        "provider_state": {"state": "ready", "available": True, "ready": True},
+        "depth_stream": depth,
+        "point_cloud_stream": {},
+        "health": health,
+        "hardware": {"id": "depth-camera-fixture-001", "kind": "depth_camera"},
+    }
     capability = _NODE_REGISTRY["DepthCamera"](provider)
     return provider, capability
 
@@ -40,7 +64,6 @@ def test_depth_nodes_register_to_provider_neutral_component():
     for name in (
         "DepthCamera",
         "DepthCameraDeviceSelect",
-        "DepthCameraTestProvider",
         "DepthObstacleWarning",
     ):
         fn = _NODE_REGISTRY[name]
@@ -126,7 +149,7 @@ def test_device_depth_candidate_degrades_and_allows_reviewed_override():
     assert override["action"] == "start"
 
 
-def test_mock_provider_implements_stable_depth_camera_contract():
+def test_depth_capability_accepts_a_normalized_provider_contract():
     provider, capability = _camera(1.2)
 
     assert provider["depth_stream"]["kind"] == "blacknode.depth-stream"
@@ -135,37 +158,15 @@ def test_mock_provider_implements_stable_depth_camera_contract():
     )
     assert provider["depth_stream"]["frame_source"]["transport"] == "inline"
     assert provider["depth_stream"]["calibration"]["fx"] > 0.0
-    assert provider["preview"].startswith("data:image/svg+xml;base64,")
+    assert provider["preview"].startswith("data:image/")
     assert capability["ready"] is True
     assert capability["depth_camera"]["kind"] == (
         "blacknode.depth-camera-capability"
     )
     assert capability["depth_camera"]["health"]["source_fresh"] is True
     assert capability["depth_camera"]["hardware_identity"]["id"] == (
-        "depth-camera-test-001"
+        "depth-camera-fixture-001"
     )
-
-
-def test_replay_provider_uses_same_contract():
-    _, original = _camera(1.5)
-    replay = {
-        "preview": original["preview"],
-        "depth_stream": original["depth_stream"],
-        "point_cloud_stream": original["point_cloud_stream"],
-        "health": original["health"],
-        "hardware": {"id": "recorded-depth-42"},
-    }
-    _, capability = _camera(
-        mode="replay",
-        replay=replay,
-        hardware_id="ignored-fallback",
-    )
-
-    assert capability["ready"] is True
-    assert capability["depth_camera"]["kind"] == (
-        "blacknode.depth-camera-capability"
-    )
-    assert capability["hardware"]["id"] == "recorded-depth-42"
 
 
 def test_attachment_configuration_is_portable_and_depth_specific():
@@ -211,20 +212,6 @@ def test_obstacle_warning_clear_warning_critical_and_unknown():
     assert result["safe_to_proceed"] is False
 
 
-def test_missing_replay_degrades_without_breaking_discovery():
-    provider = _NODE_REGISTRY["DepthCameraTestProvider"]({
-        "mode": "replay",
-        "replay": {},
-    })
-    capability = _NODE_REGISTRY["DepthCamera"](provider)
-
-    assert capability["ready"] is False
-    assert capability["depth_camera"]["kind"] == (
-        "blacknode.depth-camera-capability"
-    )
-    assert capability["health"]["state"] == "unavailable"
-
-
 def test_unavailable_real_provider_does_not_invent_ros_interfaces():
     capability = _NODE_REGISTRY["DepthCamera"]({
         "provider_state": {
@@ -251,24 +238,9 @@ def test_depth_component_templates_validate():
         assert report.ok, f"{path.name}: {report.to_dict()}"
 
 
-def test_depth_component_lab_runs_without_saving_profile(monkeypatch, tmp_path):
-    robots = tmp_path / "robots"
-    monkeypatch.setenv("BLACKNODE_ROBOTS_DIR", str(robots))
-    path = _COMPONENT / "templates" / "depth-camera-component-lab.json"
-    workflow = json.loads(path.read_text(encoding="utf-8"))
-
-    assert "RobotProfileSave" not in {
-        node["type"] for node in workflow["node_meta"].values()
-    }
-    result = run_workflow(workflow)
-    assessment, attachment, profile, preview = result["value"]
-
-    assert assessment["state"] == "clear"
-    assert attachment["capability"] == "depth_camera"
-    assert attachment["hardware_identity"]["id"] == "depth-camera-test-001"
-    assert profile["capabilities"] == ["depth_camera"]
-    assert preview.startswith("data:image/svg+xml;base64,")
-    assert not robots.exists()
+def test_depth_component_has_no_test_provider_node():
+    assert "DepthCamera" in _NODE_REGISTRY
+    assert "DepthCameraDeviceSelect" in _NODE_REGISTRY
 
 
 def test_real_device_template_defaults_to_stopped_and_unsaved(monkeypatch, tmp_path):
@@ -278,7 +250,6 @@ def test_real_device_template_defaults_to_stopped_and_unsaved(monkeypatch, tmp_p
     workflow = json.loads(path.read_text(encoding="utf-8"))
     node_types = {node["type"] for node in workflow["node_meta"].values()}
 
-    assert "DepthCameraTestProvider" not in node_types
     assert "RobotProfileSave" not in node_types
     assert workflow["node_meta"]["select_depth"]["params"]["confirm"] is False
 

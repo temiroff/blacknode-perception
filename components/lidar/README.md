@@ -1,19 +1,15 @@
 # LiDAR
 
-The `lidar` component provides a stable 2D scan contract, mock data, and ROS 2
-capture.
+The `lidar` component provides a stable 2D scan contract for live sensor data.
 
 ## Nodes
 
 | Node | Purpose |
 |---|---|
-| `LiDARTestProvider` | Generates a deterministic rectangular-room scan or replays a recorded normalized scan. |
+| `LaserScanProcessor` | Converts a generic ROS 2 `LaserScan` stream into the normalized Blacknode scan contract. |
 | `LiDAR` | Validates provider state and freshness, then emits a `blacknode.lidar-capability` plus portable attachment configuration. |
-| `LiDARROS2Scan` | Captures one `sensor_msgs/msg/LaserScan` from a configured ROS 2 topic and normalizes it. |
 
-For live visualization, connect `ComputeDevice → ROS2 → Viewer` and choose the
-`/scan` topic. `Viewer.mode=editor` embeds the point cloud; `mode=device` opens
-the native window where the deployed graph runs.
-
-The older specialized ROS 2 viewer remains loadable for saved workflows but is
-hidden from new graphs.
+For live visualization, connect
+`ComputeDevice → ROS2 → LaserScanProcessor → Viewer` and choose the `/scan`
+topic. The CUDA `Viewer` is the explicit Warp path. Workflows that only need a
+portable scan contract stop at `LaserScanProcessor` or continue to `LiDAR`.

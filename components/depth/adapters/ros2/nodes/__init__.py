@@ -1,1 +1,1 @@
-from . import depth_stream  # noqa: F401
+"""ROS 2 depth templates use generic transport and component processors."""

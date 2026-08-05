@@ -25,7 +25,6 @@ from blacknode.pkg.blacknode_ros2 import ros2_runtime as rt
 
 NEW_NODES = [
     "CameraROS2Provider",
-    "CameraROS2Subscribe",
     "CameraROS2Publish",
     "CameraROS2Http",
 ]
@@ -38,14 +37,24 @@ def test_new_nodes_registered_with_category_and_package():
         assert _NODE_REGISTRY[name]._bn_package == "blacknode-perception"
 
 
-def test_no_backend_is_structured_error(monkeypatch):
-    monkeypatch.setattr(rt, "detect_backend", lambda refresh=False: {"backend": "none", "detail": "x"})
+def test_camera_image_processor_normalizes_generic_ros2_stream():
+    result = _NODE_REGISTRY["CameraImageProcessor"]({
+        "source": {
+            "kind": "blacknode.message-stream",
+            "protocol": "ros2",
+            "state": "ready",
+            "stream_id": "rgb",
+            "topic": "/camera/image_raw",
+            "message_type": "sensor_msgs/msg/Image",
+            "stream_url": "http://robot.local:19001/stream.mjpg",
+            "snapshot_url": "http://robot.local:19001/snapshot.jpg",
+            "health_url": "http://robot.local:19001/health",
+        },
+    })
 
-    result = _NODE_REGISTRY["CameraROS2Subscribe"]({"topic": "/camera/image_raw", "message_type": "raw"})
-
-    assert result["preview"] == ""
-    assert result["streaming"] is False
-    assert "FAILED" in result["report"]
+    assert result["ready"] is True
+    assert result["preview"].endswith("/stream.mjpg")
+    assert result["frame_stream"]["kind"] == "blacknode.frame-stream"
 
 
 # --- CameraROS2Provider -------------------------------------------------------
@@ -198,161 +207,7 @@ def test_camera_provider_stop_is_scoped(monkeypatch):
     )
 
 
-# --- CameraROS2Subscribe --------------------------------------------------------------
-
-def test_image_stream_starts_with_auto_raw_topic(monkeypatch):
-    calls = {}
-
-    def fake_run(args, timeout=15.0):
-        assert args == ["topic", "type", "/camera/image_raw"]
-        return {"ok": True, "backend": "native", "stdout": "sensor_msgs/msg/Image\n", "stderr": ""}
-
-    def fake_start(**kwargs):
-        calls.update(kwargs)
-        return {
-            "ok": True,
-            "backend": "native",
-            "stream_url": "http://127.0.0.1:9010/stream.mjpg",
-            "snapshot_url": "http://127.0.0.1:9010/snapshot.jpg",
-            "health_url": "http://127.0.0.1:9010/health.json",
-            "port": 9010,
-        }
-
-    monkeypatch.setattr(rt, "run_ros2", fake_run)
-    monkeypatch.setattr(rt, "start_image_stream", fake_start)
-    result = _NODE_REGISTRY["CameraROS2Subscribe"]({
-        "topic": "/camera/image_raw",
-        "message_type": "auto",
-        "stream_id": "cam",
-        "max_fps": 12.0,
-        "max_width": 800,
-    })
-    assert result["preview"] == "http://127.0.0.1:9010/stream.mjpg"
-    assert result["streaming"] is True
-    assert result["stream_url"] == result["preview"]
-    assert result["frame_stream"] == {
-        "kind": "blacknode.frame-stream",
-        "schema_version": 1,
-        "stream_id": "cam",
-        "stream_url": "http://127.0.0.1:9010/stream.mjpg",
-        "snapshot_url": "http://127.0.0.1:9010/snapshot.jpg",
-        "health_url": "http://127.0.0.1:9010/health.json",
-        "media_type": "image/jpeg",
-        "mode": "latest",
-        "clock": "unix_ns",
-        "topic": "/camera/image_raw",
-    }
-    assert calls["message_type"] == "raw"
-    assert calls["topic"] == "/camera/image_raw"
-    assert calls["stream_id"] == "cam"
-    assert calls["max_fps"] == 12.0
-    assert calls["max_width"] == 800
-
-
-def test_image_stream_auto_detects_compressed_topic(monkeypatch):
-    monkeypatch.setattr(rt, "run_ros2", lambda args, timeout=15.0: {
-        "ok": True,
-        "backend": "native",
-        "stdout": "sensor_msgs/msg/CompressedImage\n",
-        "stderr": "",
-    })
-    monkeypatch.setattr(rt, "start_image_stream", lambda **kwargs: {
-        "ok": True,
-        "backend": "native",
-        "stream_url": "http://127.0.0.1:9011/stream.mjpg",
-        "snapshot_url": "http://127.0.0.1:9011/snapshot.jpg",
-    })
-    result = _NODE_REGISTRY["CameraROS2Subscribe"]({"topic": "/camera/compressed", "message_type": "auto"})
-    assert result["preview"].endswith("/stream.mjpg")
-    assert result["streaming"] is True
-    assert "compressed" in result["report"]
-
-
-def test_image_stream_run_once_returns_a_single_frame(monkeypatch):
-    monkeypatch.setattr(rt, "run_ros2", lambda args, timeout=15.0: {
-        "ok": True, "backend": "native", "stdout": "sensor_msgs/msg/Image\n", "stderr": "",
-    })
-    monkeypatch.setattr(rt, "start_image_stream", lambda **kwargs: pytest.fail("run-once must not start a stream"))
-    captured = {}
-
-    def fake_capture(**kwargs):
-        captured.update(kwargs)
-        return {
-            "ok": True,
-            "backend": "native",
-            "image": "data:image/jpeg;base64,/9j/2Q==",
-            "metadata": {"width": 640, "height": 480},
-        }
-
-    monkeypatch.setattr(rt, "capture_image_snapshot", fake_capture)
-
-    result = _NODE_REGISTRY["CameraROS2Subscribe"]({
-        "topic": "/camera/image_raw",
-        "message_type": "auto",
-        "__run_mode__": "once",
-    })
-
-    assert result["streaming"] is False
-    assert result["preview"].startswith("data:image/jpeg;base64,")
-    assert result["stream_url"] == ""
-    assert captured["message_type"] == "raw"
-    assert "captured one 640x480" in result["report"]
-    assert "Go Live" in result["report"]
-
-
-def test_image_stream_live_mode_still_starts_a_stream(monkeypatch):
-    monkeypatch.setattr(rt, "run_ros2", lambda args, timeout=15.0: {
-        "ok": True, "backend": "native", "stdout": "sensor_msgs/msg/Image\n", "stderr": "",
-    })
-    monkeypatch.setattr(rt, "capture_image_snapshot", lambda **kwargs: pytest.fail("live mode must not snapshot"))
-    monkeypatch.setattr(rt, "start_image_stream", lambda **kwargs: {
-        "ok": True,
-        "backend": "native",
-        "stream_url": "http://127.0.0.1:9012/stream.mjpg",
-        "snapshot_url": "http://127.0.0.1:9012/snapshot.jpg",
-    })
-
-    result = _NODE_REGISTRY["CameraROS2Subscribe"]({
-        "topic": "/camera/image_raw",
-        "message_type": "auto",
-        "__run_mode__": "live",
-    })
-
-    assert result["streaming"] is True
-    assert result["preview"] == "http://127.0.0.1:9012/stream.mjpg"
-    assert "LIVE STREAM running" in result["report"]
-
-
-def test_image_stream_stop_calls_runtime(monkeypatch):
-    captured = {}
-
-    def fake_stop(stream_id=""):
-        captured["stream_id"] = stream_id
-        return {"ok": True, "stopped": 1}
-
-    monkeypatch.setattr(rt, "stop_image_stream", fake_stop)
-    result = _NODE_REGISTRY["CameraROS2Subscribe"]({"action": "stop", "stream_id": "cam"})
-    assert captured["stream_id"] == "cam"
-    assert result["preview"] == ""
-    assert result["streaming"] is False
-    assert "stopped 1" in result["report"]
-
-
-def test_image_stream_explains_a_topic_with_no_publisher(monkeypatch):
-    def fake_run(args, timeout=15.0):
-        if args[:2] == ["topic", "type"]:
-            return {"ok": False, "backend": "native", "stdout": "", "stderr": "", "error": "exited with code 1"}
-        return {"ok": True, "backend": "native", "stdout": "/parameter_events\n", "stderr": ""}
-
-    monkeypatch.setattr(rt, "run_ros2", fake_run)
-
-    result = _NODE_REGISTRY["CameraROS2Subscribe"]({"topic": "/camera/image_raw", "message_type": "auto"})
-
-    assert result["streaming"] is False
-    assert "no active publisher" in result["report"]
-
-
-# --- CameraROS2Publish ----------------------------------------------------------------
+# --- CameraROS2Publish
 
 def test_publish_bridges_the_wired_stream_and_reads_it_back_out_of_ros(monkeypatch):
     # Capture belongs to whatever is wired in; this node only publishes it and

@@ -3,38 +3,271 @@
   "schema_version": 1,
   "name": "ROS 2 IMU Orientation Viewer",
   "saved_at": "2026-08-05T00:00:00",
-  "entrypoint": {"node_id": "viewer", "port": "scene"},
+  "entrypoint": {
+    "node_id": "viewer",
+    "port": "scene"
+  },
   "metadata": {
     "template": true,
-    "description": "Subscribe to a real robot's sensor_msgs/msg/Imu topic and show its orientation as a live 3D B-logo robot with body and world XYZ axes.",
+    "description": "Use generic ROS2 transport for a real robot's sensor_msgs/msg/Imu topic, normalize it with IMUProcessor, and show orientation as a live 3D B-logo robot with body and world XYZ axes.",
     "color": "#18a058",
-    "required_packages": ["blacknode-perception", "blacknode-ros2"]
+    "required_packages": [
+      "blacknode-robot",
+      "blacknode-perception",
+      "blacknode-ros2"
+    ],
+    "required_components": [
+      "blacknode-robot/capabilities",
+      "blacknode-perception/imu",
+      "blacknode-ros2/core"
+    ]
   },
   "node_meta": {
+    "device": {
+      "id": "device",
+      "type": "ComputeDevice",
+      "pos": [
+        80,
+        -70
+      ],
+      "params": {
+        "device_id": "",
+        "device_name": "",
+        "inspection": {}
+      },
+      "inputs": [
+        "device_id",
+        "device_name",
+        "inspection"
+      ],
+      "outputs": [
+        "configured",
+        "inspection_available",
+        "device",
+        "inspection",
+        "report"
+      ],
+      "input_types": {
+        "device_id": "Text",
+        "device_name": "Text",
+        "inspection": "Dict"
+      },
+      "output_types": {
+        "configured": "Bool",
+        "inspection_available": "Bool",
+        "device": "Dict",
+        "inspection": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "device_id": "",
+        "device_name": "",
+        "inspection": {}
+      }
+    },
     "imu_topic": {
       "id": "imu_topic",
       "type": "ROS2",
-      "pos": [80, 210],
-      "params": {"action": "start", "topic": "/imu/data", "message_type": "sensor_msgs/msg/Imu", "node_name": "blacknode_imu_viewer", "history": 3, "timeout": 10.0, "stale_after_seconds": 1.0, "qos": "sensor_data"},
-      "inputs": ["trigger", "device", "action", "topic", "message_type", "node_name", "history", "timeout", "stale_after_seconds", "qos"],
-      "outputs": ["running", "message", "messages", "stream", "status", "received", "backend", "report"],
-      "input_types": {"trigger": "Any", "device": "Dict", "action": "Text", "topic": "Text", "message_type": "Text", "node_name": "Text", "history": "Int", "timeout": "Float", "stale_after_seconds": "Float", "qos": "Text"},
-      "output_types": {"running": "Bool", "message": "Dict", "messages": "List", "stream": "Dict", "status": "Dict", "received": "Int", "backend": "Text", "report": "Text"},
-      "input_defaults": {"action": "status", "topic": "/scan", "message_type": "", "node_name": "blacknode_ros2_topic", "history": 10, "timeout": 10.0, "stale_after_seconds": 2.0, "qos": "sensor_data"}
+      "pos": [
+        80,
+        210
+      ],
+      "params": {
+        "action": "start",
+        "topic": "/imu/data",
+        "message_type": "sensor_msgs/msg/Imu",
+        "node_name": "blacknode_imu_viewer",
+        "history": 3,
+        "timeout": 10.0,
+        "stale_after_seconds": 1.0,
+        "qos": "sensor_data",
+        "transport": "message",
+        "stream_options": {}
+      },
+      "inputs": [
+        "trigger",
+        "device",
+        "action",
+        "topic",
+        "message_type",
+        "transport",
+        "stream_options",
+        "node_name",
+        "history",
+        "timeout",
+        "stale_after_seconds",
+        "qos"
+      ],
+      "outputs": [
+        "running",
+        "message",
+        "messages",
+        "stream",
+        "status",
+        "received",
+        "backend",
+        "report"
+      ],
+      "input_types": {
+        "trigger": "Any",
+        "device": "Dict",
+        "action": "Text",
+        "topic": "Text",
+        "message_type": "Text",
+        "transport": "Text",
+        "stream_options": "Dict",
+        "node_name": "Text",
+        "history": "Int",
+        "timeout": "Float",
+        "stale_after_seconds": "Float",
+        "qos": "Text"
+      },
+      "output_types": {
+        "running": "Bool",
+        "message": "Dict",
+        "messages": "List",
+        "stream": "Dict",
+        "status": "Dict",
+        "received": "Int",
+        "backend": "Text",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "action": "status",
+        "topic": "/scan",
+        "message_type": "",
+        "transport": "auto",
+        "stream_options": {},
+        "node_name": "blacknode_ros2_topic",
+        "history": 10,
+        "timeout": 10.0,
+        "stale_after_seconds": 2.0,
+        "qos": "sensor_data"
+      },
+      "input_choices": {
+        "action": [
+          "once",
+          "start",
+          "status",
+          "stop"
+        ],
+        "transport": [
+          "auto",
+          "message",
+          "image"
+        ],
+        "qos": [
+          "sensor_data",
+          "reliable",
+          "transient_local"
+        ]
+      }
     },
     "viewer": {
       "id": "viewer",
       "type": "IMUViewer",
-      "pos": [470, 90],
-      "params": {"action": "start", "viewer_id": "robot_imu", "stale_after_seconds": 1.0, "robot_length_m": 0.36, "robot_width_m": 0.28, "robot_height_m": 0.12},
-      "inputs": ["action", "source", "viewer_id", "stale_after_seconds", "robot_length_m", "robot_width_m", "robot_height_m"],
-      "outputs": ["running", "live", "scene", "status", "viewer", "report"],
-      "input_types": {"action": "Text", "source": "Dict", "viewer_id": "Text", "stale_after_seconds": "Float", "robot_length_m": "Float", "robot_width_m": "Float", "robot_height_m": "Float"},
-      "output_types": {"running": "Bool", "live": "Bool", "scene": "Dict", "status": "Dict", "viewer": "Dict", "report": "Text"},
-      "input_defaults": {"action": "status", "viewer_id": "imu_viewer", "stale_after_seconds": 1.0, "robot_length_m": 0.36, "robot_width_m": 0.28, "robot_height_m": 0.12}
+      "pos": [
+        470,
+        90
+      ],
+      "params": {
+        "action": "start",
+        "viewer_id": "robot_imu",
+        "stale_after_seconds": 1.0,
+        "robot_length_m": 0.36,
+        "robot_width_m": 0.28,
+        "robot_height_m": 0.12
+      },
+      "inputs": [
+        "action",
+        "source",
+        "viewer_id",
+        "stale_after_seconds",
+        "robot_length_m",
+        "robot_width_m",
+        "robot_height_m"
+      ],
+      "outputs": [
+        "running",
+        "live",
+        "scene",
+        "status",
+        "viewer",
+        "report"
+      ],
+      "input_types": {
+        "action": "Text",
+        "source": "Dict",
+        "viewer_id": "Text",
+        "stale_after_seconds": "Float",
+        "robot_length_m": "Float",
+        "robot_width_m": "Float",
+        "robot_height_m": "Float"
+      },
+      "output_types": {
+        "running": "Bool",
+        "live": "Bool",
+        "scene": "Dict",
+        "status": "Dict",
+        "viewer": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "action": "status",
+        "viewer_id": "imu_viewer",
+        "stale_after_seconds": 1.0,
+        "robot_length_m": 0.36,
+        "robot_width_m": 0.28,
+        "robot_height_m": 0.12
+      }
+    },
+    "imu_processor": {
+      "id": "imu_processor",
+      "type": "IMUProcessor",
+      "pos": [
+        420,
+        210
+      ],
+      "params": {},
+      "inputs": [
+        "source"
+      ],
+      "outputs": [
+        "stream",
+        "imu",
+        "health",
+        "report"
+      ],
+      "input_types": {
+        "source": "Dict"
+      },
+      "output_types": {
+        "stream": "Dict",
+        "imu": "Dict",
+        "health": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {}
     }
   },
   "edges": [
-    {"from": "imu_topic", "from_port": "stream", "to": "viewer", "to_port": "source"}
+    {
+      "from": "device",
+      "from_port": "device",
+      "to": "imu_topic",
+      "to_port": "device"
+    },
+    {
+      "from": "imu_processor",
+      "from_port": "stream",
+      "to": "viewer",
+      "to_port": "source"
+    },
+    {
+      "from": "imu_topic",
+      "from_port": "stream",
+      "to": "imu_processor",
+      "to_port": "source"
+    }
   ]
 }

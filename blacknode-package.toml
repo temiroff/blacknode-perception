@@ -1,6 +1,6 @@
 [package]
 name = "blacknode-perception"
-version = "0.4.3"
+version = "0.5.0"
 description = "Camera, tracking, VLM, and spatial-perception capabilities organized as selectable components."
 requires-blacknode = ">=0.3.0"
 layer = "perception"
@@ -19,7 +19,8 @@ capabilities = ["perception.camera", "perception.calibration", "perception.track
 nodes = ["components/camera/nodes"]
 module-root = true
 node-types = [
-  "Camera", "CameraCalibration", "CameraDiscovery", "CameraSelect", "CameraStream"
+  "Camera", "CameraCalibration", "CameraDiscovery", "CameraImageProcessor",
+  "CameraSelect", "CameraStream"
 ]
 
 [components.camera.dependencies]
@@ -34,10 +35,7 @@ nodes = ["components/camera/adapters/ros2/nodes"]
 templates = ["components/camera/adapters/ros2/templates"]
 # Colcon sources the adapter ships; build before ROS 2 nodes can run them.
 ros2-workspaces = ["components/camera/adapters/ros2/ros2_ws"]
-node-types = [
-  "CameraROS2Provider", "CameraROS2Subscribe", "CameraROS2Publish",
-  "CameraROS2Http"
-]
+node-types = ["CameraROS2Provider", "CameraROS2Publish", "CameraROS2Http"]
 
 [components.camera.adapters.ros2.dependencies]
 requires = [{ package = "blacknode-ros2", component = "core", version = ">=0.4.0,<1.0.0" }]
@@ -56,13 +54,13 @@ node-types = [
 requires = [{ package = "blacknode-perception", component = "camera", version = ">=0.2.0,<1.0.0" }]
 
 [components.depth]
-description = "Provider-neutral depth-camera contracts, mock/replay testing, health, and safe obstacle assessment."
+description = "Provider-neutral depth-camera contracts, health, and safe obstacle assessment."
 default = true
 capabilities = ["perception.depth"]
 nodes = ["components/depth/nodes"]
 templates = ["components/depth/templates"]
 node-types = [
-  "DepthCamera", "DepthCameraDeviceSelect", "DepthCameraTestProvider",
+  "DepthCamera", "DepthCameraDeviceSelect", "DepthImageProcessor",
   "DepthObstacleWarning"
 ]
 
@@ -72,7 +70,7 @@ default = true
 capabilities = ["adapter.perception.depth.ros2"]
 nodes = ["components/depth/adapters/ros2/nodes"]
 templates = ["components/depth/adapters/ros2/templates"]
-node-types = ["DepthROS2Subscribe"]
+node-types = []
 
 [components.depth.adapters.ros2.dependencies]
 requires = [
@@ -80,20 +78,20 @@ requires = [
 ]
 
 [components.lidar]
-description = "Provider-neutral LiDAR scans, deterministic replay, health, and spatial-processing inputs."
+description = "Provider-neutral LiDAR scans, health, and spatial-processing inputs."
 default = true
 capabilities = ["perception.lidar"]
 nodes = ["components/lidar/nodes"]
 templates = ["components/lidar/templates"]
-node-types = ["LiDAR", "LiDARTestProvider"]
+node-types = ["LaserScanProcessor", "LiDAR"]
 
 [components.lidar.adapters.ros2]
-description = "LaserScan capture and a native ROS 2 Warp OpenGL development viewer."
+description = "Generic ROS 2 transport dependency for the LiDAR processor and viewers."
 default = true
 capabilities = ["adapter.perception.lidar.ros2"]
 nodes = ["components/lidar/adapters/ros2/nodes"]
 templates = ["components/lidar/adapters/ros2/templates"]
-node-types = ["LiDARROS2Scan", "LiDARROS2WarpViewer"]
+node-types = []
 
 [components.lidar.adapters.ros2.dependencies]
 requires = [
@@ -102,12 +100,12 @@ requires = [
 ]
 
 [components.imu]
-description = "Provider-neutral IMU orientation, mock/replay testing, health, and a live 3D diagnostic viewer."
+description = "Provider-neutral IMU orientation, health, and a live 3D diagnostic viewer."
 default = true
 capabilities = ["perception.imu"]
 nodes = ["components/imu/nodes"]
 templates = ["components/imu/templates"]
-node-types = ["IMU", "IMUTestProvider", "IMUViewer"]
+node-types = ["IMUProcessor", "IMU", "IMUViewer"]
 
 [components.detection]
 description = "Live OpenCV object detection (face, motion) over a wired camera stream."
