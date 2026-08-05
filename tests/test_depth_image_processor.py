@@ -114,3 +114,29 @@ def test_depth_templates_validate():
         for path in sorted(root.glob("*.json")):
             report = validate_workflow(json.loads(path.read_text(encoding="utf-8")))
             assert report.ok, f"{path.name}: {report.to_dict()}"
+
+
+def test_rgbd_template_subscribes_to_existing_device_topics():
+    path = (
+        _COMPONENT
+        / "adapters"
+        / "ros2"
+        / "templates"
+        / "blacknode-rgbd-camera.json"
+    )
+    workflow = json.loads(path.read_text(encoding="utf-8"))
+    nodes = workflow["node_meta"]
+
+    assert "provider" not in nodes
+    assert nodes["rgb"]["type"] == "ROS2"
+    assert nodes["rgb"]["params"]["topic"] == "/depth_cam/rgb0/image_raw"
+    assert nodes["depth"]["type"] == "ROS2"
+    assert nodes["depth"]["params"]["topic"] == "/depth_cam/depth0/image_raw"
+    assert (
+        nodes["depth_camera_info"]["params"]["topic"]
+        == "/depth_cam/depth0/camera_info"
+    )
+    assert nodes["rgb_processor"]["type"] == "CameraImageProcessor"
+    assert nodes["depth_processor"]["type"] == "DepthImageProcessor"
+    assert nodes["rgb_out"]["type"] == "CameraViewer"
+    assert nodes["depth_out"]["type"] == "DepthViewer"

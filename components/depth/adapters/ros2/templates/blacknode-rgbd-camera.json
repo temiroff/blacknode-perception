@@ -2,14 +2,14 @@
   "kind": "blacknode.workflow",
   "schema_version": 1,
   "name": "Blacknode RGB-D Camera",
-  "saved_at": "2026-07-27T00:00:00",
+  "saved_at": "2026-08-05T00:00:00",
   "entrypoint": {
     "node_id": "rgb_out",
     "port": "preview"
   },
   "metadata": {
     "template": true,
-    "description": "Start Blacknode's managed RGB-D provider, verify its RGB and metric-depth topic group, and expose live RGB and depth previews for detection, mapping, navigation, and policy workflows.",
+    "description": "Subscribe to an existing RGB-D camera on a selected compute device through generic ROS 2 nodes, process its RGB and metric-depth streams, and show dedicated camera and depth viewers.",
     "color": "#00d2ff",
     "required_packages": [
       "blacknode-robot",
@@ -67,96 +67,12 @@
         "inspection": {}
       }
     },
-    "provider": {
-      "id": "provider",
-      "type": "CameraROS2Provider",
-      "params": {
-        "action": "start",
-        "run_id": "blacknode_rgbd_camera",
-        "profile": "blacknode_rgbd",
-        "arguments": "rgb_device:=0 depth_device:=1",
-        "rgb_topic": "/camera/rgb/image_raw",
-        "rgb_info_topic": "/camera/rgb/camera_info",
-        "depth_topic": "/camera/depth/image_raw",
-        "depth_info_topic": "/camera/depth/camera_info",
-        "points_topic": "",
-        "require_depth": true,
-        "wait_seconds": 25
-      },
-      "pos": [
-        100,
-        260
-      ],
-      "inputs": [
-        "trigger",
-        "action",
-        "run_id",
-        "profile",
-        "package",
-        "launch_file",
-        "arguments",
-        "rgb_topic",
-        "rgb_info_topic",
-        "depth_topic",
-        "depth_info_topic",
-        "points_topic",
-        "require_depth",
-        "wait_seconds"
-      ],
-      "outputs": [
-        "running",
-        "ready",
-        "run_id",
-        "profile",
-        "interfaces",
-        "report"
-      ],
-      "input_types": {
-        "trigger": "Any",
-        "action": "Text",
-        "run_id": "Text",
-        "profile": "Text",
-        "package": "Text",
-        "launch_file": "Text",
-        "arguments": "Text",
-        "rgb_topic": "Text",
-        "rgb_info_topic": "Text",
-        "depth_topic": "Text",
-        "depth_info_topic": "Text",
-        "points_topic": "Text",
-        "require_depth": "Bool",
-        "wait_seconds": "Float"
-      },
-      "output_types": {
-        "running": "Bool",
-        "ready": "Bool",
-        "run_id": "Text",
-        "profile": "Text",
-        "interfaces": "Dict",
-        "report": "Text"
-      },
-      "input_defaults": {
-        "action": "status",
-        "run_id": "camera_provider",
-        "profile": "existing_topics",
-        "package": "",
-        "launch_file": "",
-        "arguments": "",
-        "rgb_topic": "/camera/image_raw",
-        "rgb_info_topic": "/camera/camera_info",
-        "depth_topic": "",
-        "depth_info_topic": "",
-        "points_topic": "",
-        "require_depth": false,
-        "wait_seconds": 20
-      }
-    },
     "rgb": {
       "id": "rgb",
       "type": "ROS2",
       "params": {
         "action": "start",
-        "topic": "/camera/rgb/image_raw",
+        "topic": "/depth_cam/rgb0/image_raw",
         "message_type": "sensor_msgs/msg/Image",
         "transport": "image",
         "stream_options": {
@@ -260,7 +176,7 @@
       "type": "ROS2",
       "params": {
         "action": "start",
-        "topic": "/camera/depth/image_raw",
+        "topic": "/depth_cam/depth0/image_raw",
         "message_type": "sensor_msgs/msg/Image",
         "transport": "image",
         "stream_options": {
@@ -451,7 +367,7 @@
       "id": "status_out",
       "type": "Output",
       "params": {
-        "label": "RGB-D provider status"
+        "label": "RGB ROS 2 stream status"
       },
       "pos": [
         500,
@@ -587,7 +503,7 @@
       "type": "ROS2",
       "params": {
         "action": "start",
-        "topic": "/camera/depth/camera_info",
+        "topic": "/depth_cam/depth0/camera_info",
         "message_type": "sensor_msgs/msg/CameraInfo",
         "transport": "message",
         "stream_options": {},
@@ -695,19 +611,7 @@
       "to_port": "device"
     },
     {
-      "from": "provider",
-      "from_port": "report",
-      "to": "rgb",
-      "to_port": "trigger"
-    },
-    {
-      "from": "provider",
-      "from_port": "report",
-      "to": "depth",
-      "to_port": "trigger"
-    },
-    {
-      "from": "provider",
+      "from": "rgb",
       "from_port": "report",
       "to": "status_out",
       "to_port": "value"
