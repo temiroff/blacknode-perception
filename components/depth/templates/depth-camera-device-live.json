@@ -408,25 +408,37 @@
     },
     "preview": {
       "id": "preview",
-      "type": "OutputImage",
-      "params": {},
+      "type": "DepthViewer",
+      "params": {
+        "label": "Device metric depth"
+      },
       "pos": [
         2060,
         300
       ],
       "inputs": [
-        "image"
+        "source",
+        "health",
+        "label"
       ],
       "outputs": [
-        "image"
+        "preview",
+        "status",
+        "report"
       ],
       "input_types": {
-        "image": "Image"
+        "source": "Dict",
+        "health": "Dict",
+        "label": "Text"
       },
       "output_types": {
-        "image": "Image"
+        "preview": "Image",
+        "status": "Dict",
+        "report": "Text"
       },
-      "input_defaults": {}
+      "input_defaults": {
+        "label": "Depth"
+      }
     },
     "attachment": {
       "id": "attachment",
@@ -1057,9 +1069,15 @@
     },
     {
       "from": "depth_camera",
-      "from_port": "preview",
+      "from_port": "depth_stream",
       "to": "preview",
-      "to_port": "image"
+      "to_port": "source"
+    },
+    {
+      "from": "depth_camera",
+      "from_port": "health",
+      "to": "preview",
+      "to_port": "health"
     },
     {
       "from": "depth_camera",

@@ -5,7 +5,7 @@
   "saved_at": "2026-07-21T00:00:00",
   "entrypoint": {
     "node_id": "image_out",
-    "port": "image"
+    "port": "preview"
   },
   "metadata": {
     "template": true,
@@ -48,7 +48,8 @@
         "topic",
         "camera",
         "stream_url",
-        "report"
+        "report",
+        "frame_stream"
       ],
       "input_types": {
         "trigger": "Any",
@@ -66,7 +67,8 @@
         "topic": "Text",
         "camera": "Text",
         "stream_url": "Text",
-        "report": "Text"
+        "report": "Text",
+        "frame_stream": "Dict"
       },
       "input_defaults": {
         "action": "start",
@@ -110,25 +112,37 @@
     },
     "image_out": {
       "id": "image_out",
-      "type": "OutputImage",
-      "params": {},
+      "type": "CameraViewer",
+      "params": {
+        "label": "ROS 2 camera"
+      },
       "pos": [
         620,
         180
       ],
       "inputs": [
-        "image"
+        "source",
+        "health",
+        "label"
       ],
       "outputs": [
-        "image"
+        "preview",
+        "status",
+        "report"
       ],
       "input_types": {
-        "image": "Image"
+        "source": "Dict",
+        "health": "Dict",
+        "label": "Text"
       },
       "output_types": {
-        "image": "Image"
+        "preview": "Image",
+        "status": "Dict",
+        "report": "Text"
       },
-      "input_defaults": {}
+      "input_defaults": {
+        "label": "Camera"
+      }
     },
     "topics_out": {
       "id": "topics_out",
@@ -278,9 +292,9 @@
     },
     {
       "from": "camera",
-      "from_port": "preview",
+      "from_port": "frame_stream",
       "to": "image_out",
-      "to_port": "image"
+      "to_port": "source"
     },
     {
       "from": "camera",
