@@ -1,4 +1,4 @@
-"""Provider-neutral 2D LiDAR contracts and deterministic test scans."""
+"""Provider-neutral 2D LiDAR contracts."""
 from __future__ import annotations
 
 import copy
@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from blacknode import contracts as bn_contracts
-from blacknode.node import Bool, Dict, Enum, Float, Int, List, Text, node
+from blacknode.node import Bool, Dict, Float, List, Text, node
 
 
 _CATEGORY = "Perception"
@@ -20,24 +20,6 @@ def _number(value: Any, default: float = 0.0) -> float:
     except (TypeError, ValueError):
         return default
     return result if math.isfinite(result) else default
-
-
-def _mock_room_scan(sample_count: int, width_m: float, height_m: float) -> list[float]:
-    """Return ray distances to an axis-aligned room around the sensor origin."""
-    half_width = max(0.25, width_m * 0.5)
-    half_height = max(0.25, height_m * 0.5)
-    result: list[float] = []
-    for index in range(sample_count):
-        angle = -math.pi + (2.0 * math.pi * index / sample_count)
-        dx = math.cos(angle)
-        dy = math.sin(angle)
-        candidates: list[float] = []
-        if abs(dx) > 1e-8:
-            candidates.append(half_width / abs(dx))
-        if abs(dy) > 1e-8:
-            candidates.append(half_height / abs(dy))
-        result.append(round(min(candidates), 6))
-    return result
 
 
 def _scan_health(scan: dict, *, source_fresh: bool, error: str = "") -> dict:
@@ -66,111 +48,74 @@ def _scan_health(scan: dict, *, source_fresh: bool, error: str = "") -> dict:
     }
 
 
+def _stream_message(outputs: dict) -> dict:
+    envelope = outputs.get("message") if isinstance(outputs.get("message"), dict) else {}
+    return envelope.get("message") if isinstance(envelope.get("message"), dict) else envelope
+
+
 @node(
-    name="LiDARTestProvider",
+    name="LaserScanProcessor",
     category=_CATEGORY,
     description=(
-        "Provide a deterministic mock room scan or a recorded LaserScan using "
-        "the same normalized contract as a physical LiDAR provider."
+        "Process a generic ROS2 LaserScan stream into a normalized scan while "
+        "preserving its managed stream for live viewers and optional Warp stages."
     ),
-    inputs={
-        "mode": Enum(["mock", "replay"], default="mock"),
-        "provider_id": Text(default="lidar_test"),
-        "hardware_id": Text(default="lidar-test-001"),
-        "frame_id": Text(default="laser"),
-        "sample_count": Int(default=360),
-        "room_width_m": Float(default=6.0),
-        "room_height_m": Float(default=4.0),
-        "replay": Dict,
-    },
-    outputs={
-        "provider_state": Dict,
-        "laser_scan": Dict,
-        "health": Dict,
-        "hardware": Dict,
-        "report": Text,
-    },
+    inputs={"source": Dict},
+    outputs={"stream": Dict, "laser_scan": Dict, "health": Dict, "report": Text},
+    primary_inputs=["source"],
+    primary_outputs=["stream", "laser_scan", "health"],
 )
-def lidar_test_provider(ctx: dict) -> dict:
-    mode = str(ctx.get("mode") or "mock").strip().lower()
-    provider_id = str(ctx.get("provider_id") or "lidar_test").strip()
-    hardware_id = str(ctx.get("hardware_id") or "lidar-test-001").strip()
-    frame_id = str(ctx.get("frame_id") or "laser").strip()
-    replay = ctx.get("replay") if isinstance(ctx.get("replay"), dict) else {}
-
-    if mode == "replay":
-        scan = copy.deepcopy(
-            replay.get("laser_scan")
-            if isinstance(replay.get("laser_scan"), dict)
-            else replay
-        )
-        ready = scan.get("kind") == "blacknode.laser-scan-stream"
-        health = copy.deepcopy(replay.get("health") or {})
-        if not isinstance(health, dict) or not health:
-            health = _scan_health(
-                scan,
-                source_fresh=ready,
-                error="" if ready else "select a recorded LaserScan artifact",
-            )
-        report = (
-            f"replay LiDAR provider {provider_id}: "
-            + ("ready" if ready else "unavailable; select a recorded LaserScan artifact")
-        )
-    else:
-        sample_count = max(8, min(5_000_000, int(ctx.get("sample_count") or 360)))
-        width_m = max(0.5, _number(ctx.get("room_width_m"), 6.0))
-        height_m = max(0.5, _number(ctx.get("room_height_m"), 4.0))
-        ranges = _mock_room_scan(sample_count, width_m, height_m)
-        scan = bn_contracts.laser_scan_stream(
-            frame_id,
-            angle_min=-math.pi,
-            angle_max=math.pi,
-            angle_increment=2.0 * math.pi / sample_count,
-            range_min=0.05,
-            range_max=max(width_m, height_m) * 2.0,
-            ranges=ranges,
-        )
-        scan.update({
-            "provider_id": provider_id,
-            "topic": "/scan",
-            "message_type": "sensor_msgs/msg/LaserScan",
-        })
-        health = _scan_health(scan, source_fresh=True)
-        ready = True
-        report = (
-            f"mock LiDAR provider {provider_id}: {sample_count} rays in a "
-            f"{width_m:g} m x {height_m:g} m room"
-        )
-
-    hardware = copy.deepcopy(
-        replay.get("hardware")
-        if mode == "replay" and isinstance(replay.get("hardware"), dict)
-        else {}
+def laser_scan_processor(ctx: dict) -> dict:
+    source = ctx.get("source") if isinstance(ctx.get("source"), dict) else {}
+    valid = (
+        source.get("kind") == "blacknode.message-stream"
+        and source.get("protocol") == "ros2"
+        and source.get("message_type") == "sensor_msgs/msg/LaserScan"
     )
-    hardware.setdefault("id", hardware_id)
-    hardware.setdefault("serial", hardware_id)
-    hardware.setdefault("kind", "lidar")
-    hardware.setdefault("simulated", mode == "mock")
-    provider_state = {
-        "kind": "blacknode.provider-state",
-        "schema_version": 1,
-        "provider_id": provider_id,
-        "provider": {
-            "package": "blacknode-perception",
-            "component": "lidar",
-            "adapter": "test",
-        },
-        "state": "ready" if ready else "unavailable",
-        "available": ready,
-        "ready": ready,
-        "health": copy.deepcopy(health),
-    }
+    stream = copy.deepcopy(source) if valid else {}
+    if stream:
+        stream["processor"] = "LaserScanProcessor"
+    reader = ctx.get("__message_stream_reader__")
+    outputs = reader(source) if valid and callable(reader) else {}
+    message = _stream_message(outputs) if isinstance(outputs, dict) else {}
+    ranges = message.get("ranges") if isinstance(message.get("ranges"), list) else []
+    scan = {}
+    if ranges:
+        header = message.get("header") if isinstance(message.get("header"), dict) else {}
+        scan = bn_contracts.laser_scan_stream(
+            str(header.get("frame_id") or "laser"),
+            angle_min=_number(message.get("angle_min"), -math.pi),
+            angle_max=_number(message.get("angle_max"), math.pi),
+            angle_increment=_number(message.get("angle_increment"), 0.0),
+            range_min=max(0.0, _number(message.get("range_min"), 0.0)),
+            range_max=max(0.0, _number(message.get("range_max"), 0.0)),
+            ranges=list(ranges)[:100_000],
+        )
+        stamp = header.get("stamp") if isinstance(header.get("stamp"), dict) else {}
+        scan.update(
+            topic=str(source.get("topic") or ""),
+            message_type="sensor_msgs/msg/LaserScan",
+            source_time_ns=int(stamp.get("sec") or 0) * 1_000_000_000 + int(stamp.get("nanosec") or 0),
+            receive_time_ns=time.time_ns(),
+            scan_time=max(0.0, _number(message.get("scan_time"), 0.0)),
+            time_increment=max(0.0, _number(message.get("time_increment"), 0.0)),
+            intensities=list(message.get("intensities") or [])[:100_000],
+        )
+    status = outputs.get("status") if isinstance(outputs, dict) and isinstance(outputs.get("status"), dict) else {}
+    health = _scan_health(
+        scan,
+        source_fresh=bool(status.get("source_fresh") and scan),
+        error="" if valid else "connect ROS2.stream carrying sensor_msgs/msg/LaserScan",
+    )
     return {
-        "provider_state": provider_state,
+        "stream": stream,
         "laser_scan": scan,
         "health": health,
-        "hardware": hardware,
-        "report": report,
+        "report": (
+            f"LaserScan processor ready for {source.get('topic') or '(topic not set)'}"
+            if valid
+            else "LaserScan processor needs a generic ROS2 LaserScan stream"
+        ),
     }
 
 

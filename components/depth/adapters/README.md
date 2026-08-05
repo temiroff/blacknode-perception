@@ -15,13 +15,10 @@ description = "Metric depth-image and point-cloud capability over ROS 2."
 default = false
 capabilities = ["adapter.perception.depth.ros2"]
 nodes = ["components/depth/adapters/ros2/nodes"]
-node-types = ["DepthROS2Subscribe"]
+node-types = []
 ```
 
-Adapters stay `default = false`: the capability package owns them, and
-`blacknode-ros2` provides only the shared transport underneath.
-
-`DepthROS2Subscribe` preserves the metric ROS 2 depth topic and exposes a
-normalized `blacknode.depth-stream` handle. Its MJPEG output is a visualization
-of `16UC1`, `mono16`, or `32FC1` values for the editor; downstream spatial
-workflows consume the original metric interface.
+The adapter templates use generic `ROS2` transport followed by
+`DepthImageProcessor`. The MJPEG output visualizes `16UC1`, `mono16`, or
+`32FC1` values; downstream spatial workflows consume the original metric frame
+handle.

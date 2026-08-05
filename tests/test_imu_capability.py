@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 
 import blacknode  # noqa: F401
+from blacknode import contracts as bn_contracts
 import pytest
 from blacknode.node import _NODE_REGISTRY
 from blacknode.packages import _import_nodes_module, _tag_new_package_nodes
@@ -26,19 +27,26 @@ _tag_new_package_nodes(
 
 
 def test_imu_nodes_register_to_provider_neutral_component():
-    for name in ("IMU", "IMUTestProvider", "IMUViewer"):
+    for name in ("IMUProcessor", "IMU", "IMUViewer"):
         fn = _NODE_REGISTRY[name]
         assert fn._bn_package == "blacknode-perception"
         assert fn._bn_component == "imu"
         assert not fn._bn_adapter
 
 
-def test_mock_provider_and_capability_preserve_normalized_orientation_contract():
-    provider = _NODE_REGISTRY["IMUTestProvider"]({
-        "roll_deg": 30.0,
-        "pitch_deg": -15.0,
-        "yaw_deg": 90.0,
-    })
+def test_capability_preserves_normalized_orientation_contract():
+    sample = bn_contracts.imu_stream(
+        "imu_link",
+        sequence=1,
+        orientation=(0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5)),
+        linear_acceleration=(0.0, 0.0, 9.80665),
+    )
+    provider = {
+        "provider_state": {"available": True, "state": "ready"},
+        "imu": sample,
+        "health": {"state": "ready", "source_fresh": True},
+        "hardware": {"id": "imu-fixture-001", "kind": "imu"},
+    }
     capability = _NODE_REGISTRY["IMU"]({**provider, "attachment_id": "body_imu"})
 
     orientation = provider["imu"]["orientation"]
@@ -52,11 +60,41 @@ def test_mock_provider_and_capability_preserve_normalized_orientation_contract()
     assert interface["required"] is True
 
 
-def test_replay_provider_degrades_structurally_when_sample_is_missing():
-    missing = _NODE_REGISTRY["IMUTestProvider"]({"mode": "replay", "replay": {}})
-    capability = _NODE_REGISTRY["IMU"](missing)
+def test_imu_processor_normalizes_generic_ros2_stream():
+    source = {
+        "kind": "blacknode.message-stream",
+        "protocol": "ros2",
+        "topic": "/imu/data",
+        "message_type": "sensor_msgs/msg/Imu",
+    }
 
-    assert missing["health"]["state"] == "unavailable"
+    def reader(_source):
+        return {
+            "message": {
+                "header": {"frame_id": "imu_link"},
+                "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                "orientation_covariance": [0.01] + [0.0] * 8,
+                "angular_velocity": {"x": 0.1, "y": 0.2, "z": 0.3},
+                "linear_acceleration": {"x": 0.0, "y": 0.0, "z": 9.81},
+            },
+            "received": 1,
+            "status": {"state": "ready", "source_fresh": True, "received": 1},
+        }
+
+    result = _NODE_REGISTRY["IMUProcessor"]({
+        "source": source,
+        "__message_stream_reader__": reader,
+    })
+
+    assert result["stream"]["processor"] == "IMUProcessor"
+    assert result["imu"]["kind"] == "blacknode.imu-stream"
+    assert result["imu"]["frame"] == "imu_link"
+    assert result["health"]["source_fresh"] is True
+
+
+def test_imu_capability_degrades_structurally_when_sample_is_missing():
+    capability = _NODE_REGISTRY["IMU"]({})
+
     assert capability["ready"] is False
     assert capability["health"]["source_fresh"] is False
 
@@ -124,14 +162,8 @@ def test_imu_viewer_rejects_messages_with_no_orientation_estimate():
     _module.imu.stop_runtime_services()
 
 
-def test_imu_templates_validate_and_hardware_free_lab_runs():
+def test_imu_templates_validate():
     for path in sorted((_COMPONENT / "templates").glob("*.json")):
         workflow = json.loads(path.read_text(encoding="utf-8"))
         report = validate_workflow(workflow)
         assert report.ok, f"{path.name}: {report.to_dict()}"
-
-    path = _COMPONENT / "templates" / "imu-orientation-lab.json"
-    result = run_workflow(json.loads(path.read_text(encoding="utf-8")))
-    assert result["value"]["primitive"] == "imu-orientation"
-    assert result["value"]["imu"]["source_fresh"] is True
-    _module.imu.stop_runtime_services()

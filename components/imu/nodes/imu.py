@@ -1,12 +1,10 @@
-"""Provider-neutral IMU contracts, deterministic test data, and live viewer."""
+"""Provider-neutral IMU contracts and live viewer."""
 from __future__ import annotations
 
 import copy
 import math
-import time
 from typing import Any
 
-from blacknode import contracts as bn_contracts
 from blacknode.node import Bool, Dict, Enum, Float, Text, node
 
 from . import imu_runtime
@@ -18,17 +16,6 @@ stop_runtime_services = imu_runtime.stop_runtime_services
 _CATEGORY = "Perception"
 _CAPABILITY_KIND = "blacknode.imu-capability"
 
-
-def _quaternion_from_euler(roll: float, pitch: float, yaw: float) -> tuple[float, float, float, float]:
-    cr, sr = math.cos(roll * 0.5), math.sin(roll * 0.5)
-    cp, sp = math.cos(pitch * 0.5), math.sin(pitch * 0.5)
-    cy, sy = math.cos(yaw * 0.5), math.sin(yaw * 0.5)
-    return (
-        sr * cp * cy - cr * sp * sy,
-        cr * sp * cy + sr * cp * sy,
-        cr * cp * sy - sr * sp * cy,
-        cr * cp * cy + sr * sp * sy,
-    )
 
 def _health(imu: dict[str, Any], *, fresh: bool, error: str = "") -> dict[str, Any]:
     orientation = imu.get("orientation") if isinstance(imu.get("orientation"), dict) else {}
@@ -44,66 +31,46 @@ def _health(imu: dict[str, Any], *, fresh: bool, error: str = "") -> dict[str, A
 
 
 @node(
-    name="IMUTestProvider",
+    name="IMUProcessor",
     category=_CATEGORY,
-    description="Provide deterministic mock orientation or replay a normalized IMU sample for hardware-free viewer testing.",
-    inputs={
-        "mode": Enum(["mock", "replay"], default="mock"),
-        "provider_id": Text(default="imu_test"),
-        "hardware_id": Text(default="imu-test-001"),
-        "frame_id": Text(default="imu_link"),
-        "roll_deg": Float(default=0.0),
-        "pitch_deg": Float(default=0.0),
-        "yaw_deg": Float(default=0.0),
-        "replay": Dict,
-    },
-    outputs={"provider_state": Dict, "imu": Dict, "health": Dict, "hardware": Dict, "report": Text},
-    primary_inputs=["mode", "roll_deg", "pitch_deg", "yaw_deg", "replay"],
-    primary_outputs=["imu", "health", "report"],
+    description=(
+        "Process a generic ROS2 IMU stream into a normalized sample while "
+        "preserving its managed stream for the live orientation viewer."
+    ),
+    inputs={"source": Dict},
+    outputs={"stream": Dict, "imu": Dict, "health": Dict, "report": Text},
+    primary_inputs=["source"],
+    primary_outputs=["stream", "imu", "health"],
 )
-def imu_test_provider(ctx: dict) -> dict:
-    mode = str(ctx.get("mode") or "mock").strip().lower()
-    provider_id = str(ctx.get("provider_id") or "imu_test").strip() or "imu_test"
-    hardware_id = str(ctx.get("hardware_id") or "imu-test-001").strip() or "imu-test-001"
-    if mode == "replay":
-        replay = copy.deepcopy(ctx.get("replay")) if isinstance(ctx.get("replay"), dict) else {}
-        imu = replay.get("imu") if isinstance(replay.get("imu"), dict) else replay
-        if imu.get("kind") != "blacknode.imu-stream":
-            imu = {}
-        fresh = bool(imu)
-        health = copy.deepcopy(replay.get("health")) if isinstance(replay.get("health"), dict) else _health(
-            imu, fresh=fresh, error="" if fresh else "Replay has no blacknode.imu-stream sample",
-        )
-        hardware = copy.deepcopy(replay.get("hardware")) if isinstance(replay.get("hardware"), dict) else {}
-        hardware.setdefault("id", hardware_id)
-    else:
-        roll = math.radians(float(ctx.get("roll_deg") or 0.0))
-        pitch = math.radians(float(ctx.get("pitch_deg") or 0.0))
-        yaw = math.radians(float(ctx.get("yaw_deg") or 0.0))
-        imu = bn_contracts.imu_stream(
-            str(ctx.get("frame_id") or "imu_link").strip() or "imu_link",
-            sequence=1,
-            orientation=_quaternion_from_euler(roll, pitch, yaw),
-            linear_acceleration=(0.0, 0.0, 9.80665),
-        )
-        health = _health(imu, fresh=True)
-        hardware = {"id": hardware_id, "provider": provider_id, "simulated": True}
-    hardware.setdefault("provider", provider_id)
-    hardware.setdefault("simulated", mode == "mock")
-    provider_state = {
-        "kind": "blacknode.imu-provider-state",
-        "schema_version": 1,
-        "provider_id": provider_id,
-        "mode": mode,
-        "available": bool(imu),
-        "sample_time_ns": int(imu.get("receive_time_ns") or time.time_ns()) if imu else 0,
-    }
+def imu_processor(ctx: dict) -> dict:
+    source = ctx.get("source") if isinstance(ctx.get("source"), dict) else {}
+    valid = (
+        source.get("kind") == "blacknode.message-stream"
+        and source.get("protocol") == "ros2"
+        and source.get("message_type") == "sensor_msgs/msg/Imu"
+    )
+    stream = copy.deepcopy(source) if valid else {}
+    if stream:
+        stream["processor"] = "IMUProcessor"
+    sample, status = imu_runtime._normalize_source(
+        source,
+        ctx.get("__message_stream_reader__"),
+        1.0,
+    ) if valid else ({}, {"state": "unavailable", "source_fresh": False})
+    health = _health(
+        sample,
+        fresh=bool(status.get("source_fresh") and sample),
+        error="" if valid else "connect ROS2.stream carrying sensor_msgs/msg/Imu",
+    )
     return {
-        "provider_state": provider_state,
-        "imu": imu,
+        "stream": stream,
+        "imu": sample,
         "health": health,
-        "hardware": hardware,
-        "report": "IMU test sample ready" if imu else str(health.get("error") or "IMU replay unavailable"),
+        "report": (
+            f"IMU processor ready for {source.get('topic') or '(topic not set)'}"
+            if valid
+            else "IMU processor needs a generic ROS2 IMU stream"
+        ),
     }
 
 
