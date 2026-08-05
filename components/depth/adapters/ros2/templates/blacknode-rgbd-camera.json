@@ -313,7 +313,12 @@
       "id": "depth_out",
       "type": "DepthViewer",
       "params": {
-        "label": "Metric depth"
+        "label": "Metric depth",
+        "auto_range": false,
+        "near_m": 0.2,
+        "far_m": 2.0,
+        "palette": "grayscale",
+        "invalid_color": "magenta"
       },
       "pos": [
         930,
@@ -322,7 +327,12 @@
       "inputs": [
         "source",
         "health",
-        "label"
+        "label",
+        "auto_range",
+        "near_m",
+        "far_m",
+        "palette",
+        "invalid_color"
       ],
       "outputs": [
         "preview",
@@ -332,7 +342,12 @@
       "input_types": {
         "source": "Dict",
         "health": "Dict",
-        "label": "Text"
+        "label": "Text",
+        "auto_range": "Bool",
+        "near_m": "Float",
+        "far_m": "Float",
+        "palette": "Enum",
+        "invalid_color": "Enum"
       },
       "output_types": {
         "preview": "Image",
@@ -340,7 +355,12 @@
         "report": "Text"
       },
       "input_defaults": {
-        "label": "Depth"
+        "label": "Depth",
+        "auto_range": true,
+        "near_m": 0.2,
+        "far_m": 2.0,
+        "palette": "grayscale",
+        "invalid_color": "black"
       }
     },
     "contracts_out": {

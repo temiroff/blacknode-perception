@@ -71,6 +71,17 @@ A compatible provider emits:
 Safety features use `p05` as a noise-resistant near-distance measurement.
 The display preview is visualization data and is not used for measurement.
 
+`DepthViewer` keeps display choices separate from metric processing. Leave
+`auto_range=true` for per-frame percentile contrast, or set it to false and
+choose stable `near_m` and `far_m` limits. The grayscale palette draws nearer
+valid samples brighter and farther samples darker. `turbo` provides a color
+alternative, and `invalid_color=magenta` distinguishes missing measurements
+from valid far-depth pixels. These controls affect only the preview URL; the
+original binary frame, metric summaries, obstacle assessment, and downstream
+projection remain unchanged. The editor presents these controls directly below
+the live depth image. Changing them updates the MJPEG request immediately and
+persists the viewer setting without recooking the graph.
+
 To add another provider:
 
 1. Put its SDK and device-specific code in an adapter or driver extension.
