@@ -1,49 +1,7 @@
 """Depth-image presentation separated from metric 3D reconstruction."""
 from __future__ import annotations
 
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-
 from blacknode.node import Bool, Dict, Enum, Float, Image, Text, node
-
-
-def _display_url(
-    url: str,
-    *,
-    depth_scale: float,
-    auto_range: bool,
-    near_m: float,
-    far_m: float,
-    palette: str,
-    invalid_color: str,
-) -> str:
-    if not url or (
-        auto_range and palette == "grayscale" and invalid_color == "black"
-    ):
-        return url
-    parsed = urlsplit(url)
-    if parsed.scheme not in {"http", "https"}:
-        return url
-    controlled = {
-        "depth_range",
-        "depth_scale",
-        "depth_near_m",
-        "depth_far_m",
-        "depth_palette",
-        "depth_invalid",
-    }
-    query = [(key, value) for key, value in parse_qsl(parsed.query) if key not in controlled]
-    query.extend([
-        ("depth_range", "auto" if auto_range else "fixed"),
-        ("depth_scale", f"{depth_scale:.12g}"),
-        ("depth_palette", palette),
-        ("depth_invalid", invalid_color),
-    ])
-    if not auto_range:
-        query.extend([
-            ("depth_near_m", f"{near_m:.12g}"),
-            ("depth_far_m", f"{far_m:.12g}"),
-        ])
-    return urlunsplit(parsed._replace(query=urlencode(query)))
 
 
 @node(
@@ -78,16 +36,8 @@ def depth_viewer(ctx: dict) -> dict:
     far_m = max(near_m + 0.001, float(ctx.get("far_m") or 2.0))
     palette = str(ctx.get("palette") or "grayscale")
     invalid_color = str(ctx.get("invalid_color") or "black")
-    source_preview = str(source.get("stream_url") or source.get("snapshot_url") or "") if valid else ""
-    preview = _display_url(
-        source_preview,
-        depth_scale=depth_scale,
-        auto_range=auto_range,
-        near_m=near_m,
-        far_m=far_m,
-        palette=palette,
-        invalid_color=invalid_color,
-    )
+    preview = str(source.get("stream_url") or source.get("snapshot_url") or "") if valid else ""
+    frame_source = source.get("frame_source") if isinstance(source.get("frame_source"), dict) else {}
     nested_health = source.get("health") if isinstance(source.get("health"), dict) else {}
     effective_health = health or nested_health
     source_state = str(effective_health.get("state") or ("ready" if preview else "waiting"))
@@ -103,6 +53,7 @@ def depth_viewer(ctx: dict) -> dict:
         "label": str(ctx.get("label") or "Depth"),
         "encoding": str(source.get("encoding") or ""),
         "depth_scale": depth_scale,
+        "frame_url": str(frame_source.get("url") or ""),
         "display": {
             "range": "auto" if auto_range else "fixed",
             "near_m": near_m,

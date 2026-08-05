@@ -76,11 +76,11 @@ The display preview is visualization data and is not used for measurement.
 choose stable `near_m` and `far_m` limits. The grayscale palette draws nearer
 valid samples brighter and farther samples darker. `turbo` provides a color
 alternative, and `invalid_color=magenta` distinguishes missing measurements
-from valid far-depth pixels. These controls affect only the preview URL; the
-original binary frame, metric summaries, obstacle assessment, and downstream
-projection remain unchanged. The editor presents these controls directly below
-the live depth image. Changing them updates the MJPEG request immediately and
-persists the viewer setting without recooking the graph.
+from valid far-depth pixels. The editor presents these controls directly below
+the live depth image and renders them locally from the original binary frame.
+Changing them redraws the canvas immediately and persists the viewer setting
+without recooking the graph. Metric summaries, obstacle assessment, and
+downstream projection remain unchanged.
 
 To add another provider:
 
