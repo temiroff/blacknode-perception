@@ -1,0 +1,40 @@
+{
+  "kind": "blacknode.workflow",
+  "schema_version": 1,
+  "name": "ROS 2 IMU Orientation Viewer",
+  "saved_at": "2026-08-05T00:00:00",
+  "entrypoint": {"node_id": "viewer", "port": "scene"},
+  "metadata": {
+    "template": true,
+    "description": "Subscribe to a real robot's sensor_msgs/msg/Imu topic and show its orientation as a live 3D B-logo robot with body and world XYZ axes.",
+    "color": "#18a058",
+    "required_packages": ["blacknode-perception", "blacknode-ros2"]
+  },
+  "node_meta": {
+    "imu_topic": {
+      "id": "imu_topic",
+      "type": "ROS2",
+      "pos": [80, 210],
+      "params": {"action": "start", "topic": "/imu/data", "message_type": "sensor_msgs/msg/Imu", "node_name": "blacknode_imu_viewer", "history": 3, "timeout": 10.0, "stale_after_seconds": 1.0, "qos": "sensor_data"},
+      "inputs": ["trigger", "device", "action", "topic", "message_type", "node_name", "history", "timeout", "stale_after_seconds", "qos"],
+      "outputs": ["running", "message", "messages", "stream", "status", "received", "backend", "report"],
+      "input_types": {"trigger": "Any", "device": "Dict", "action": "Text", "topic": "Text", "message_type": "Text", "node_name": "Text", "history": "Int", "timeout": "Float", "stale_after_seconds": "Float", "qos": "Text"},
+      "output_types": {"running": "Bool", "message": "Dict", "messages": "List", "stream": "Dict", "status": "Dict", "received": "Int", "backend": "Text", "report": "Text"},
+      "input_defaults": {"action": "status", "topic": "/scan", "message_type": "", "node_name": "blacknode_ros2_topic", "history": 10, "timeout": 10.0, "stale_after_seconds": 2.0, "qos": "sensor_data"}
+    },
+    "viewer": {
+      "id": "viewer",
+      "type": "IMUViewer",
+      "pos": [470, 90],
+      "params": {"action": "start", "viewer_id": "robot_imu", "stale_after_seconds": 1.0, "robot_length_m": 0.36, "robot_width_m": 0.28, "robot_height_m": 0.12},
+      "inputs": ["action", "source", "viewer_id", "stale_after_seconds", "robot_length_m", "robot_width_m", "robot_height_m"],
+      "outputs": ["running", "live", "scene", "status", "viewer", "report"],
+      "input_types": {"action": "Text", "source": "Dict", "viewer_id": "Text", "stale_after_seconds": "Float", "robot_length_m": "Float", "robot_width_m": "Float", "robot_height_m": "Float"},
+      "output_types": {"running": "Bool", "live": "Bool", "scene": "Dict", "status": "Dict", "viewer": "Dict", "report": "Text"},
+      "input_defaults": {"action": "status", "viewer_id": "imu_viewer", "stale_after_seconds": 1.0, "robot_length_m": 0.36, "robot_width_m": 0.28, "robot_height_m": 0.12}
+    }
+  },
+  "edges": [
+    {"from": "imu_topic", "from_port": "stream", "to": "viewer", "to_port": "source"}
+  ]
+}

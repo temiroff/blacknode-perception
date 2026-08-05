@@ -1,6 +1,6 @@
 [package]
 name = "blacknode-perception"
-version = "0.4.1"
+version = "0.4.3"
 description = "Camera, tracking, VLM, and spatial-perception capabilities organized as selectable components."
 requires-blacknode = ">=0.3.0"
 layer = "perception"
@@ -102,9 +102,12 @@ requires = [
 ]
 
 [components.imu]
-description = "IMU streams, filtering, and health contracts."
-default = false
+description = "Provider-neutral IMU orientation, mock/replay testing, health, and a live 3D diagnostic viewer."
+default = true
 capabilities = ["perception.imu"]
+nodes = ["components/imu/nodes"]
+templates = ["components/imu/templates"]
+node-types = ["IMU", "IMUTestProvider", "IMUViewer"]
 
 [components.detection]
 description = "Live OpenCV object detection (face, motion) over a wired camera stream."

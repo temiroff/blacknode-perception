@@ -436,6 +436,18 @@ def ros2_image_stream(ctx: dict) -> dict:
         "stream_url": stream_url,
         "snapshot_url": snapshot_url,
         "stream_id": stream_id,
+        "frame_stream": {
+            "kind": "blacknode.frame-stream",
+            "schema_version": 1,
+            "stream_id": stream_id,
+            "stream_url": stream_url,
+            "snapshot_url": snapshot_url,
+            "health_url": str(result.get("health_url") or ""),
+            "media_type": "image/jpeg",
+            "mode": "latest",
+            "clock": "unix_ns",
+            "topic": topic,
+        },
         "report": report,
     }
 

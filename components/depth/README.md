@@ -80,6 +80,10 @@ A compatible provider emits:
 
 - `depth_stream.kind = blacknode.depth-stream`;
 - `depth_stream.encoding` and `depth_stream.depth_scale`;
+- `depth_stream.frame_source`, a compact inline replay or binary live-frame
+  handle that keeps dense pixel arrays out of workflow JSON;
+- `depth_stream.calibration`, including pinhole dimensions and `fx`, `fy`,
+  `cx`, and `cy` for metric projection;
 - `health.source_fresh`, `health.state`, and `health.summary_m`;
 - stable frame and physical hardware identity;
 - an optional `blacknode.point-cloud-stream`;
