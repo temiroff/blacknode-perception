@@ -21,4 +21,6 @@ node-types = []
 The adapter templates use generic `ROS2` transport followed by
 `DepthImageProcessor`. The MJPEG output visualizes `16UC1`, `mono16`, or
 `32FC1` values; downstream spatial workflows consume the original metric frame
-handle.
+handle. `DepthViewer` applies automatic or fixed metric display ranges,
+grayscale or turbo coloring, and black or magenta invalid pixels locally from
+that raw frame without modifying the transported depth data.
