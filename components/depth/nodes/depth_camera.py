@@ -54,6 +54,30 @@ def _summary(values: list[float], total_count: int | None = None) -> dict:
     }
 
 
+def _pinhole_calibration(
+    width: int,
+    height: int,
+    *,
+    fx: float,
+    fy: float,
+    cx: float,
+    cy: float,
+) -> dict:
+    return {
+        "kind": "blacknode.camera-calibration",
+        "schema_version": 1,
+        "camera_model": "pinhole",
+        "width": max(1, int(width)),
+        "height": max(1, int(height)),
+        "fx": float(fx),
+        "fy": float(fy),
+        "cx": float(cx),
+        "cy": float(cy),
+        "distortion_model": "none",
+        "distortion": [],
+    }
+
+
 def _preview(distance_m: float, label: str) -> str:
     distance = max(0.0, distance_m)
     hue = max(0, min(220, round(distance * 80)))
@@ -374,6 +398,35 @@ def depth_camera_test_provider(ctx: dict) -> dict:
             "samples_m": samples,
             "topic": "/camera/depth/image_raw",
             "camera_info_topic": "/camera/depth/camera_info",
+        })
+        frame_width = 8
+        frame_height = 6
+        frame_values = [
+            samples[index % len(samples)]
+            for index in range(frame_width * frame_height)
+        ]
+        calibration = _pinhole_calibration(
+            frame_width,
+            frame_height,
+            fx=7.0,
+            fy=7.0,
+            cx=(frame_width - 1) * 0.5,
+            cy=(frame_height - 1) * 0.5,
+        )
+        depth.update({
+            "calibration": calibration,
+            "frame_source": {
+                "kind": "blacknode.depth-frame-source",
+                "schema_version": 1,
+                "transport": "inline",
+                "frame": frame_id,
+                "width": frame_width,
+                "height": frame_height,
+                "encoding": "32FC1",
+                "depth_scale": 1.0,
+                "source_time_ns": time.time_ns(),
+                "depth_m": frame_values,
+            },
         })
         health = _health({}, summary_m=summary_m, default_fresh=True)
         health["source_time_ns"] = time.time_ns()

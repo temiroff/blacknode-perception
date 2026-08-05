@@ -230,6 +230,18 @@ def test_image_stream_starts_with_auto_raw_topic(monkeypatch):
     assert result["preview"] == "http://127.0.0.1:9010/stream.mjpg"
     assert result["streaming"] is True
     assert result["stream_url"] == result["preview"]
+    assert result["frame_stream"] == {
+        "kind": "blacknode.frame-stream",
+        "schema_version": 1,
+        "stream_id": "cam",
+        "stream_url": "http://127.0.0.1:9010/stream.mjpg",
+        "snapshot_url": "http://127.0.0.1:9010/snapshot.jpg",
+        "health_url": "http://127.0.0.1:9010/health.json",
+        "media_type": "image/jpeg",
+        "mode": "latest",
+        "clock": "unix_ns",
+        "topic": "/camera/image_raw",
+    }
     assert calls["message_type"] == "raw"
     assert calls["topic"] == "/camera/image_raw"
     assert calls["stream_id"] == "cam"

@@ -12,7 +12,8 @@
 | `lidar` | On | Provider-neutral LaserScan data, replay/mock providers, and ROS 2/Warp adapters |
 | `detection` | On | Managed OpenCV detection streams |
 | `tracking` | On | Deterministic color tracking and target hints |
-| `imu`, `slam`, `localization` | Off | Optional capability contracts |
+| `imu` | On | `IMU`, `IMUTestProvider`, `IMUViewer` |
+| `slam`, `localization` | Off | Optional capability contracts |
 
 ## Main nodes
 

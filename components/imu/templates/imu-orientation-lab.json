@@ -1,0 +1,48 @@
+{
+  "kind": "blacknode.workflow",
+  "schema_version": 1,
+  "name": "IMU Orientation Lab",
+  "saved_at": "2026-08-05T00:00:00",
+  "entrypoint": {"node_id": "viewer", "port": "scene"},
+  "metadata": {
+    "template": true,
+    "description": "Rotate a deterministic mock IMU sample and inspect the B-logo robot, XYZ axes, quaternion-derived roll/pitch/yaw, angular velocity, acceleration, and freshness.",
+    "color": "#18a058",
+    "required_packages": ["blacknode-perception"]
+  },
+  "node_meta": {
+    "imu_sample": {
+      "id": "imu_sample",
+      "type": "IMUTestProvider",
+      "pos": [90, 210],
+      "params": {
+        "mode": "mock",
+        "provider_id": "imu_lab",
+        "hardware_id": "imu-test-001",
+        "frame_id": "imu_link",
+        "roll_deg": 20.0,
+        "pitch_deg": -15.0,
+        "yaw_deg": 35.0
+      },
+      "inputs": ["mode", "provider_id", "hardware_id", "frame_id", "roll_deg", "pitch_deg", "yaw_deg", "replay"],
+      "outputs": ["provider_state", "imu", "health", "hardware", "report"],
+      "input_types": {"mode": "Text", "provider_id": "Text", "hardware_id": "Text", "frame_id": "Text", "roll_deg": "Float", "pitch_deg": "Float", "yaw_deg": "Float", "replay": "Dict"},
+      "output_types": {"provider_state": "Dict", "imu": "Dict", "health": "Dict", "hardware": "Dict", "report": "Text"},
+      "input_defaults": {"mode": "mock", "provider_id": "imu_test", "hardware_id": "imu-test-001", "frame_id": "imu_link", "roll_deg": 0.0, "pitch_deg": 0.0, "yaw_deg": 0.0}
+    },
+    "viewer": {
+      "id": "viewer",
+      "type": "IMUViewer",
+      "pos": [470, 90],
+      "params": {"action": "start", "viewer_id": "imu_orientation_lab", "stale_after_seconds": 60.0, "robot_length_m": 0.36, "robot_width_m": 0.28, "robot_height_m": 0.12},
+      "inputs": ["action", "source", "viewer_id", "stale_after_seconds", "robot_length_m", "robot_width_m", "robot_height_m"],
+      "outputs": ["running", "live", "scene", "status", "viewer", "report"],
+      "input_types": {"action": "Text", "source": "Dict", "viewer_id": "Text", "stale_after_seconds": "Float", "robot_length_m": "Float", "robot_width_m": "Float", "robot_height_m": "Float"},
+      "output_types": {"running": "Bool", "live": "Bool", "scene": "Dict", "status": "Dict", "viewer": "Dict", "report": "Text"},
+      "input_defaults": {"action": "status", "viewer_id": "imu_viewer", "stale_after_seconds": 1.0, "robot_length_m": 0.36, "robot_width_m": 0.28, "robot_height_m": 0.12}
+    }
+  },
+  "edges": [
+    {"from": "imu_sample", "from_port": "imu", "to": "viewer", "to_port": "source"}
+  ]
+}

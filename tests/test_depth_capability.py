@@ -130,6 +130,11 @@ def test_mock_provider_implements_stable_depth_camera_contract():
     provider, capability = _camera(1.2)
 
     assert provider["depth_stream"]["kind"] == "blacknode.depth-stream"
+    assert provider["depth_stream"]["frame_source"]["kind"] == (
+        "blacknode.depth-frame-source"
+    )
+    assert provider["depth_stream"]["frame_source"]["transport"] == "inline"
+    assert provider["depth_stream"]["calibration"]["fx"] > 0.0
     assert provider["preview"].startswith("data:image/svg+xml;base64,")
     assert capability["ready"] is True
     assert capability["depth_camera"]["kind"] == (

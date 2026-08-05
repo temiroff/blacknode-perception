@@ -54,6 +54,7 @@ def test_depth_stream_preserves_metric_contract_and_preview(monkeypatch):
         "stream_url": "http://127.0.0.1:9015/stream.mjpg",
         "snapshot_url": "http://127.0.0.1:9015/snapshot.jpg",
         "health_url": "http://127.0.0.1:9015/health.json",
+        "frame_url": "http://127.0.0.1:9015/frame.bin",
     })
     monkeypatch.setitem(
         depth_node.__globals__,
@@ -85,6 +86,8 @@ def test_depth_stream_preserves_metric_contract_and_preview(monkeypatch):
         "frame_id": "depth_frame",
         "encoding": "16UC1",
         "depth_scale": 0.001,
+        "fx": 525.0,
+        "fy": 525.0,
     })
 
     assert result["streaming"] is True
@@ -94,6 +97,9 @@ def test_depth_stream_preserves_metric_contract_and_preview(monkeypatch):
     assert result["depth_stream"]["encoding"] == "16UC1"
     assert result["depth_stream"]["depth_scale"] == 0.001
     assert result["depth_stream"]["summary_m"]["p05"] == 0.5
+    assert result["frame_url"].endswith("/frame.bin")
+    assert result["depth_stream"]["frame_source"]["transport"] == "http-binary"
+    assert result["depth_stream"]["calibration"]["fx"] == 525.0
     assert result["health"]["state"] == "ready"
     assert result["health"]["source_fresh"] is True
     assert result["point_cloud_stream"]["kind"] == (

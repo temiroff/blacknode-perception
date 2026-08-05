@@ -30,6 +30,7 @@ def _blank(stream_id: str, report: str) -> dict:
         "stream_url": "",
         "snapshot_url": "",
         "health_url": "",
+        "frame_url": "",
         "stream_id": stream_id,
         "depth_stream": {},
         "point_cloud_stream": {},
@@ -170,6 +171,10 @@ def _read_stream_health(url: str, wait_seconds: float) -> dict:
         "frame_id": Text(default="camera_depth"),
         "encoding": Enum(["auto", "16UC1", "32FC1"], default="auto"),
         "depth_scale": Float(default=0.001),
+        "fx": Float(default=0.0),
+        "fy": Float(default=0.0),
+        "cx": Float(default=0.0),
+        "cy": Float(default=0.0),
         "host": Text(default="127.0.0.1"),
         "port": Int(default=0),
         "max_fps": Float(default=10.0),
@@ -184,6 +189,7 @@ def _read_stream_health(url: str, wait_seconds: float) -> dict:
         "stream_url": Text,
         "snapshot_url": Text,
         "health_url": Text,
+        "frame_url": Text,
         "stream_id": Text,
         "depth_stream": Dict,
         "point_cloud_stream": Dict,
@@ -320,6 +326,45 @@ def ros2_depth_stream(ctx: dict) -> dict:
         stale_after_seconds=stale_after_seconds,
     )
     depth["health"] = health
+    frame_url = str(started.get("frame_url") or "")
+    metadata = (
+        health_payload.get("metadata")
+        if isinstance(health_payload.get("metadata"), dict)
+        else {}
+    )
+    width = max(0, int(metadata.get("width") or 0))
+    height = max(0, int(metadata.get("height") or 0))
+    fx = max(0.0, float(ctx.get("fx") or 0.0))
+    fy = max(0.0, float(ctx.get("fy") or 0.0))
+    cx = float(ctx.get("cx") or ((width - 1) * 0.5 if width else 0.0))
+    cy = float(ctx.get("cy") or ((height - 1) * 0.5 if height else 0.0))
+    calibration = {
+        "kind": "blacknode.camera-calibration",
+        "schema_version": 1,
+        "camera_model": "pinhole",
+        "width": width,
+        "height": height,
+        "fx": fx,
+        "fy": fy,
+        "cx": cx,
+        "cy": cy,
+        "distortion_model": "none",
+        "distortion": [],
+        "camera_info_topic": str(ctx.get("camera_info_topic") or "").strip(),
+        "ready": bool(width and height and fx > 0.0 and fy > 0.0),
+    }
+    depth.update({
+        "calibration": calibration,
+        "frame_source": {
+            "kind": "blacknode.depth-frame-source",
+            "schema_version": 1,
+            "transport": "http-binary",
+            "url": frame_url,
+            "frame": frame_id,
+            "encoding": encoding,
+            "depth_scale": depth_scale,
+        },
+    })
     if health["summary_m"]:
         depth["summary_m"] = health["summary_m"]
     points_topic = str(ctx.get("points_topic") or "").strip()
@@ -339,6 +384,7 @@ def ros2_depth_stream(ctx: dict) -> dict:
         "stream_url": stream_url,
         "snapshot_url": snapshot_url,
         "health_url": health_url,
+        "frame_url": frame_url,
         "stream_id": stream_id,
         "depth_stream": depth,
         "point_cloud_stream": points,
