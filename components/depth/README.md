@@ -61,6 +61,8 @@ A compatible provider emits:
   handle that keeps dense pixel arrays out of workflow JSON;
 - `depth_stream.calibration`, including pinhole dimensions and `fx`, `fy`,
   `cx`, and `cy` for metric projection;
+- `depth_stream.camera_info_source` when calibration comes from a managed ROS 2
+  CameraInfo stream, allowing live consumers to resolve a late first sample;
 - `health.source_fresh`, `health.state`, and `health.summary_m`;
 - stable frame and physical hardware identity;
 - an optional `blacknode.point-cloud-stream`;
@@ -79,7 +81,9 @@ alternative, and `invalid_color=magenta` distinguishes missing measurements
 from valid far-depth pixels. The editor presents these controls directly below
 the live depth image and renders them locally from the original binary frame.
 Changing them redraws the canvas immediately and persists the viewer setting
-without recooking the graph. Metric summaries, obstacle assessment, and
+without recooking the graph. Click the live depth image to mark a source pixel
+and inspect its current distance in metres; the selected pixel continues
+updating as new frames arrive. Metric summaries, obstacle assessment, and
 downstream projection remain unchanged.
 
 To add another provider:

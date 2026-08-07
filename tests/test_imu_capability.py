@@ -126,6 +126,9 @@ def test_imu_viewer_tracks_ros_quaternion_and_source_freshness():
         },
         "__message_stream_reader__": reader,
         "__node_id__": "imu-viewer-node",
+        "body_frame": "base_link",
+        "sensor_mount_pitch_deg": -0.5,
+        "sensor_mount_yaw_deg": 90.0,
     })
 
     assert result["running"] is True
@@ -134,6 +137,16 @@ def test_imu_viewer_tracks_ros_quaternion_and_source_freshness():
     assert result["scene"]["frame"] == "imu_link"
     assert result["scene"]["imu"]["euler_rad"]["yaw"] == pytest.approx(math.pi / 2)
     assert result["scene"]["imu"]["angular_velocity_rps"]["y"] == pytest.approx(-0.2)
+    mounting = result["scene"]["mounting"]
+    assert mounting["body_frame"] == "base_link"
+    assert mounting["sensor_frame"] == "imu_link"
+    assert mounting["body_from_sensor_rpy_deg"] == {
+        "roll": 0.0,
+        "pitch": -0.5,
+        "yaw": 90.0,
+    }
+    mount_q = mounting["body_from_sensor_quaternion"]
+    assert math.sqrt(sum(value * value for value in mount_q.values())) == pytest.approx(1.0)
     runtime = _module.imu.runtime_status()
     assert runtime["node_outputs"][0]["node_id"] == "imu-viewer-node"
     _module.imu.stop_runtime_services()

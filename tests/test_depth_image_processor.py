@@ -94,6 +94,7 @@ def test_depth_processor_reads_camera_info_from_a_second_generic_stream():
     assert result["calibration"]["fx"] == 500.0
     assert result["calibration"]["fy"] == 501.0
     assert result["calibration"]["distortion_model"] == "plumb_bob"
+    assert result["depth_stream"]["camera_info_source"] == info_source
 
 
 def test_depth_processor_rejects_non_image_stream():
@@ -132,11 +133,25 @@ def test_rgbd_template_subscribes_to_existing_device_topics():
     assert nodes["rgb"]["params"]["topic"] == "/depth_cam/rgb0/image_raw"
     assert nodes["depth"]["type"] == "ROS2"
     assert nodes["depth"]["params"]["topic"] == "/depth_cam/depth0/image_raw"
+    assert nodes["ir"]["type"] == "ROS2"
+    assert nodes["ir"]["params"]["topic"] == "/depth_cam/ir0/image_raw"
     assert (
         nodes["depth_camera_info"]["params"]["topic"]
         == "/depth_cam/depth0/camera_info"
     )
     assert nodes["rgb_processor"]["type"] == "CameraImageProcessor"
     assert nodes["depth_processor"]["type"] == "DepthImageProcessor"
+    assert nodes["ir_processor"]["type"] == "CameraImageProcessor"
     assert nodes["rgb_out"]["type"] == "CameraViewer"
     assert nodes["depth_out"]["type"] == "DepthViewer"
+    assert nodes["ir_out"]["type"] == "CameraViewer"
+    assert nodes["depth_projector"]["type"] == "WarpDepthProjector"
+    assert nodes["cloud_out"]["type"] == "DepthCloudViewer"
+    assert nodes["cloud_out"]["params"]["color_mode"] == "rgb"
+    assert {edge["to_port"] for edge in workflow["edges"] if edge["to"] == "cloud_out"} == {
+        "source",
+        "rgb_source",
+        "ir_source",
+        "depth_projection",
+    }
+    assert "blacknode-cuda" in workflow["metadata"]["required_packages"]

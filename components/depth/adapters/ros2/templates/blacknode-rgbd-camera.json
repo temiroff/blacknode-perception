@@ -9,18 +9,20 @@
   },
   "metadata": {
     "template": true,
-    "description": "Subscribe to an existing RGB-D camera on a selected compute device through generic ROS 2 nodes, process its RGB and metric-depth streams, and show dedicated camera and depth viewers.",
+    "description": "Subscribe to an existing RGB-D and infrared camera on a selected compute device through generic ROS 2 nodes, process its RGB, IR, and metric-depth streams, and show dedicated image viewers plus a Warp-projected 3D point cloud with selectable depth, RGB, or IR color.",
     "color": "#00d2ff",
     "required_packages": [
       "blacknode-robot",
       "blacknode-ros2",
-      "blacknode-perception"
+      "blacknode-perception",
+      "blacknode-cuda"
     ],
     "required_components": [
       "blacknode-robot/capabilities",
       "blacknode-ros2/core",
       "blacknode-perception/camera",
       "blacknode-perception/depth",
+      "blacknode-cuda/spatial-processing",
       "blacknode-ros2/topics"
     ]
   },
@@ -275,6 +277,110 @@
         ]
       }
     },
+    "ir": {
+      "id": "ir",
+      "type": "ROS2",
+      "params": {
+        "action": "start",
+        "topic": "/depth_cam/ir0/image_raw",
+        "message_type": "sensor_msgs/msg/Image",
+        "transport": "image",
+        "stream_options": {
+          "host": "0.0.0.0",
+          "port": 0,
+          "max_fps": 15,
+          "max_width": 960,
+          "jpeg_quality": 82
+        },
+        "node_name": "blacknode_ir",
+        "history": 2,
+        "timeout": 15,
+        "stale_after_seconds": 2,
+        "qos": "sensor_data"
+      },
+      "pos": [
+        500,
+        1000
+      ],
+      "inputs": [
+        "trigger",
+        "device",
+        "action",
+        "topic",
+        "message_type",
+        "transport",
+        "stream_options",
+        "node_name",
+        "history",
+        "timeout",
+        "stale_after_seconds",
+        "qos"
+      ],
+      "outputs": [
+        "running",
+        "message",
+        "messages",
+        "stream",
+        "status",
+        "received",
+        "backend",
+        "report"
+      ],
+      "input_types": {
+        "trigger": "Any",
+        "device": "Dict",
+        "action": "Text",
+        "topic": "Text",
+        "message_type": "Text",
+        "transport": "Text",
+        "stream_options": "Dict",
+        "node_name": "Text",
+        "history": "Int",
+        "timeout": "Float",
+        "stale_after_seconds": "Float",
+        "qos": "Text"
+      },
+      "output_types": {
+        "running": "Bool",
+        "message": "Dict",
+        "messages": "List",
+        "stream": "Dict",
+        "status": "Dict",
+        "received": "Int",
+        "backend": "Text",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "action": "status",
+        "topic": "/scan",
+        "message_type": "",
+        "transport": "auto",
+        "stream_options": {},
+        "node_name": "blacknode_ros2_topic",
+        "history": 10,
+        "timeout": 10,
+        "stale_after_seconds": 2,
+        "qos": "sensor_data"
+      },
+      "input_choices": {
+        "action": [
+          "once",
+          "start",
+          "status",
+          "stop"
+        ],
+        "transport": [
+          "auto",
+          "message",
+          "image"
+        ],
+        "qos": [
+          "sensor_data",
+          "reliable",
+          "transient_local"
+        ]
+      }
+    },
     "rgb_out": {
       "id": "rgb_out",
       "type": "CameraViewer",
@@ -361,6 +467,40 @@
         "far_m": 2.0,
         "palette": "grayscale",
         "invalid_color": "black"
+      }
+    },
+    "ir_out": {
+      "id": "ir_out",
+      "type": "CameraViewer",
+      "params": {
+        "label": "Infrared camera"
+      },
+      "pos": [
+        930,
+        1000
+      ],
+      "inputs": [
+        "source",
+        "health",
+        "label"
+      ],
+      "outputs": [
+        "preview",
+        "status",
+        "report"
+      ],
+      "input_types": {
+        "source": "Dict",
+        "health": "Dict",
+        "label": "Text"
+      },
+      "output_types": {
+        "preview": "Image",
+        "status": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "label": "Camera"
       }
     },
     "contracts_out": {
@@ -518,6 +658,309 @@
         ]
       }
     },
+    "ir_processor": {
+      "id": "ir_processor",
+      "type": "CameraImageProcessor",
+      "params": {},
+      "pos": [
+        890,
+        1000
+      ],
+      "inputs": [
+        "source"
+      ],
+      "outputs": [
+        "preview",
+        "ready",
+        "stream_url",
+        "snapshot_url",
+        "frame_stream",
+        "health",
+        "report"
+      ],
+      "input_types": {
+        "source": "Dict"
+      },
+      "output_types": {
+        "preview": "Image",
+        "ready": "Bool",
+        "stream_url": "Text",
+        "snapshot_url": "Text",
+        "frame_stream": "Dict",
+        "health": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {}
+    },
+    "depth_projector": {
+      "id": "depth_projector",
+      "type": "WarpDepthProjector",
+      "params": {
+        "enabled": true,
+        "minimum_depth_m": 0.15,
+        "maximum_depth_m": 8,
+        "downsample_stride": 2,
+        "maximum_points": 50000,
+        "spatial_filter": true,
+        "spatial_max_delta_m": 0.04,
+        "hole_fill": true,
+        "minimum_neighbors": 3,
+        "outlier_rejection": true,
+        "outlier_max_delta_m": 0.12,
+        "temporal_smoothing": 0.35,
+        "temporal_max_delta_m": 0.08,
+        "stale_after_seconds": 2,
+        "target_frame": "camera_depth",
+        "sensor_x_m": 0,
+        "sensor_y_m": 0,
+        "sensor_z_m": 0,
+        "sensor_roll_rad": 0,
+        "sensor_pitch_rad": 0,
+        "sensor_yaw_rad": 0,
+        "compare_cpu": false
+      },
+      "pos": [
+        930,
+        760
+      ],
+      "inputs": [
+        "enabled",
+        "minimum_depth_m",
+        "maximum_depth_m",
+        "downsample_stride",
+        "maximum_points",
+        "spatial_filter",
+        "spatial_max_delta_m",
+        "hole_fill",
+        "minimum_neighbors",
+        "outlier_rejection",
+        "outlier_max_delta_m",
+        "temporal_smoothing",
+        "temporal_max_delta_m",
+        "stale_after_seconds",
+        "target_frame",
+        "sensor_x_m",
+        "sensor_y_m",
+        "sensor_z_m",
+        "sensor_roll_rad",
+        "sensor_pitch_rad",
+        "sensor_yaw_rad",
+        "compare_cpu"
+      ],
+      "outputs": [
+        "stage",
+        "enabled",
+        "workload",
+        "report"
+      ],
+      "input_types": {
+        "enabled": "Bool",
+        "minimum_depth_m": "Float",
+        "maximum_depth_m": "Float",
+        "downsample_stride": "Int",
+        "maximum_points": "Int",
+        "spatial_filter": "Bool",
+        "spatial_max_delta_m": "Float",
+        "hole_fill": "Bool",
+        "minimum_neighbors": "Int",
+        "outlier_rejection": "Bool",
+        "outlier_max_delta_m": "Float",
+        "temporal_smoothing": "Float",
+        "temporal_max_delta_m": "Float",
+        "stale_after_seconds": "Float",
+        "target_frame": "Text",
+        "sensor_x_m": "Float",
+        "sensor_y_m": "Float",
+        "sensor_z_m": "Float",
+        "sensor_roll_rad": "Float",
+        "sensor_pitch_rad": "Float",
+        "sensor_yaw_rad": "Float",
+        "compare_cpu": "Bool"
+      },
+      "output_types": {
+        "stage": "Dict",
+        "enabled": "Bool",
+        "workload": "Text",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "enabled": true,
+        "minimum_depth_m": 0.1,
+        "maximum_depth_m": 8,
+        "downsample_stride": 2,
+        "maximum_points": 50000,
+        "spatial_filter": true,
+        "spatial_max_delta_m": 0.04,
+        "hole_fill": true,
+        "minimum_neighbors": 3,
+        "outlier_rejection": true,
+        "outlier_max_delta_m": 0.12,
+        "temporal_smoothing": 0.35,
+        "temporal_max_delta_m": 0.08,
+        "stale_after_seconds": 2,
+        "target_frame": "base_link",
+        "sensor_x_m": 0,
+        "sensor_y_m": 0,
+        "sensor_z_m": 0,
+        "sensor_roll_rad": 0,
+        "sensor_pitch_rad": 0,
+        "sensor_yaw_rad": 0,
+        "compare_cpu": false
+      }
+    },
+    "cloud_out": {
+      "id": "cloud_out",
+      "type": "DepthCloudViewer",
+      "params": {
+        "action": "start",
+        "color_mode": "rgb",
+        "pose_parent_frame": "odom",
+        "pose_child_frame": "auto",
+        "viewer_id": "rgbd_ir_point_cloud",
+        "mode": "editor",
+        "device": "cuda:0",
+        "filter_min_m": 0.15,
+        "filter_max_m": 8,
+        "downsample_stride": 1,
+        "sensor_x_m": 0,
+        "sensor_y_m": 0,
+        "sensor_yaw_rad": 0,
+        "point_radius_m": 0.015,
+        "fps": 30,
+        "animate_scan": false,
+        "show_rays": false,
+        "accumulate_hits": false,
+        "max_accumulated_points": 50000,
+        "pulse_hz": 1,
+        "pose_sync_tolerance_s": 0.25
+      },
+      "pos": [
+        1370,
+        430
+      ],
+      "inputs": [
+        "action",
+        "source",
+        "color_source",
+        "rgb_source",
+        "ir_source",
+        "color_mode",
+        "depth_projection",
+        "pose",
+        "pose_static",
+        "pose_parent_frame",
+        "pose_child_frame",
+        "viewer_id",
+        "mode",
+        "device",
+        "filter_min_m",
+        "filter_max_m",
+        "downsample_stride",
+        "sensor_x_m",
+        "sensor_y_m",
+        "sensor_yaw_rad",
+        "point_radius_m",
+        "fps",
+        "animate_scan",
+        "show_rays",
+        "accumulate_hits",
+        "max_accumulated_points",
+        "pulse_hz",
+        "pose_sync_tolerance_s"
+      ],
+      "outputs": [
+        "running",
+        "live",
+        "scene",
+        "status",
+        "viewer",
+        "report"
+      ],
+      "input_types": {
+        "action": "Enum",
+        "source": "Dict",
+        "color_source": "Dict",
+        "rgb_source": "Dict",
+        "ir_source": "Dict",
+        "color_mode": "Enum",
+        "depth_projection": "Dict",
+        "pose": "Dict",
+        "pose_static": "Dict",
+        "pose_parent_frame": "Text",
+        "pose_child_frame": "Text",
+        "viewer_id": "Text",
+        "mode": "Enum",
+        "device": "Enum",
+        "filter_min_m": "Float",
+        "filter_max_m": "Float",
+        "downsample_stride": "Int",
+        "sensor_x_m": "Float",
+        "sensor_y_m": "Float",
+        "sensor_yaw_rad": "Float",
+        "point_radius_m": "Float",
+        "fps": "Int",
+        "animate_scan": "Bool",
+        "show_rays": "Bool",
+        "accumulate_hits": "Bool",
+        "max_accumulated_points": "Int",
+        "pulse_hz": "Float",
+        "pose_sync_tolerance_s": "Float"
+      },
+      "output_types": {
+        "running": "Bool",
+        "live": "Bool",
+        "scene": "Dict",
+        "status": "Dict",
+        "viewer": "Dict",
+        "report": "Text"
+      },
+      "input_defaults": {
+        "action": "status",
+        "color_mode": "depth",
+        "pose_parent_frame": "odom",
+        "pose_child_frame": "auto",
+        "viewer_id": "depth_cloud_viewer",
+        "mode": "editor",
+        "device": "cuda:0",
+        "filter_min_m": 0.1,
+        "filter_max_m": 12,
+        "downsample_stride": 1,
+        "sensor_x_m": 0,
+        "sensor_y_m": 0,
+        "sensor_yaw_rad": 0,
+        "point_radius_m": 0.025,
+        "fps": 30,
+        "animate_scan": true,
+        "show_rays": true,
+        "accumulate_hits": true,
+        "max_accumulated_points": 50000,
+        "pulse_hz": 1,
+        "pose_sync_tolerance_s": 0.25
+      },
+      "input_choices": {
+        "action": [
+          "status",
+          "start",
+          "clear",
+          "pause",
+          "resume",
+          "stop"
+        ],
+        "color_mode": [
+          "depth",
+          "rgb",
+          "ir"
+        ],
+        "mode": [
+          "editor",
+          "device"
+        ],
+        "device": [
+          "cuda:0",
+          "cpu"
+        ]
+      }
+    },
     "depth_camera_info": {
       "id": "depth_camera_info",
       "type": "ROS2",
@@ -631,6 +1074,12 @@
       "to_port": "device"
     },
     {
+      "from": "device",
+      "from_port": "device",
+      "to": "ir",
+      "to_port": "device"
+    },
+    {
       "from": "rgb",
       "from_port": "report",
       "to": "status_out",
@@ -661,6 +1110,18 @@
       "to_port": "health"
     },
     {
+      "from": "ir_processor",
+      "from_port": "frame_stream",
+      "to": "ir_out",
+      "to_port": "source"
+    },
+    {
+      "from": "ir_processor",
+      "from_port": "health",
+      "to": "ir_out",
+      "to_port": "health"
+    },
+    {
       "from": "depth_processor",
       "from_port": "depth_stream",
       "to": "contracts_out",
@@ -677,6 +1138,36 @@
       "from_port": "stream",
       "to": "depth_processor",
       "to_port": "source"
+    },
+    {
+      "from": "ir",
+      "from_port": "stream",
+      "to": "ir_processor",
+      "to_port": "source"
+    },
+    {
+      "from": "depth_processor",
+      "from_port": "depth_stream",
+      "to": "cloud_out",
+      "to_port": "source"
+    },
+    {
+      "from": "rgb_processor",
+      "from_port": "frame_stream",
+      "to": "cloud_out",
+      "to_port": "rgb_source"
+    },
+    {
+      "from": "ir_processor",
+      "from_port": "frame_stream",
+      "to": "cloud_out",
+      "to_port": "ir_source"
+    },
+    {
+      "from": "depth_projector",
+      "from_port": "stage",
+      "to": "cloud_out",
+      "to_port": "depth_projection"
     },
     {
       "from": "depth_camera_info",

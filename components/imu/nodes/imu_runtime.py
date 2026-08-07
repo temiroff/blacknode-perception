@@ -72,6 +72,26 @@ def _euler(quaternion: dict[str, float]) -> dict[str, float]:
     return {"roll": roll, "pitch": pitch, "yaw": yaw}
 
 
+def _quaternion_from_rpy_degrees(
+    roll_deg: float,
+    pitch_deg: float,
+    yaw_deg: float,
+) -> dict[str, float]:
+    """Return the ROS fixed-axis RPY rotation from sensor frame to body frame."""
+    roll = math.radians(roll_deg) * 0.5
+    pitch = math.radians(pitch_deg) * 0.5
+    yaw = math.radians(yaw_deg) * 0.5
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    return {
+        "x": sr * cp * cy - cr * sp * sy,
+        "y": cr * sp * cy + sr * cp * sy,
+        "z": cr * cp * sy - sr * sp * cy,
+        "w": cr * cp * cy + sr * sp * sy,
+    }
+
+
 def _vector(value: Any) -> dict[str, float]:
     vector = value if isinstance(value, dict) else {}
     return {axis: _finite(vector.get(axis)) for axis in ("x", "y", "z")}
@@ -225,6 +245,20 @@ def _update(session: dict[str, Any]) -> None:
                 "length_m": options["robot_length_m"],
                 "width_m": options["robot_width_m"],
                 "height_m": options["robot_height_m"],
+            },
+            "mounting": {
+                "body_frame": options["body_frame"],
+                "sensor_frame": sample["frame"],
+                "body_from_sensor_rpy_deg": {
+                    "roll": options["sensor_mount_roll_deg"],
+                    "pitch": options["sensor_mount_pitch_deg"],
+                    "yaw": options["sensor_mount_yaw_deg"],
+                },
+                "body_from_sensor_quaternion": _quaternion_from_rpy_degrees(
+                    options["sensor_mount_roll_deg"],
+                    options["sensor_mount_pitch_deg"],
+                    options["sensor_mount_yaw_deg"],
+                ),
             },
             "imu": {
                 "orientation": sample["orientation"],
