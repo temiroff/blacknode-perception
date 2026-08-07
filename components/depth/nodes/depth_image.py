@@ -165,6 +165,7 @@ def depth_image_processor(ctx: dict) -> dict:
         "health_url": str(source.get("health_url") or ""),
         "topic": str(source.get("topic") or ""),
         "calibration": calibration,
+        "camera_info_source": dict(info_source),
         "health": health,
         "frame_source": {
             "kind": "blacknode.depth-frame-source",

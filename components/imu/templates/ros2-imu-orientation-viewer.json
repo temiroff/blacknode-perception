@@ -9,7 +9,7 @@
   },
   "metadata": {
     "template": true,
-    "description": "Use generic ROS2 transport for a real robot's sensor_msgs/msg/Imu topic, normalize it with IMUProcessor, and show orientation as a live 3D B-logo robot with body and world XYZ axes.",
+    "description": "Use generic ROS2 transport for a real robot's sensor_msgs/msg/Imu topic, normalize it with IMUProcessor, and show orientation as a live 3D B-logo robot with world, body, and mounted sensor axes.",
     "color": "#18a058",
     "required_packages": [
       "blacknode-robot",
@@ -176,7 +176,11 @@
         "stale_after_seconds": 1.0,
         "robot_length_m": 0.36,
         "robot_width_m": 0.28,
-        "robot_height_m": 0.12
+        "robot_height_m": 0.12,
+        "body_frame": "base_link",
+        "sensor_mount_roll_deg": 0.0,
+        "sensor_mount_pitch_deg": 0.0,
+        "sensor_mount_yaw_deg": 0.0
       },
       "inputs": [
         "action",
@@ -185,7 +189,11 @@
         "stale_after_seconds",
         "robot_length_m",
         "robot_width_m",
-        "robot_height_m"
+        "robot_height_m",
+        "body_frame",
+        "sensor_mount_roll_deg",
+        "sensor_mount_pitch_deg",
+        "sensor_mount_yaw_deg"
       ],
       "outputs": [
         "running",
@@ -202,7 +210,11 @@
         "stale_after_seconds": "Float",
         "robot_length_m": "Float",
         "robot_width_m": "Float",
-        "robot_height_m": "Float"
+        "robot_height_m": "Float",
+        "body_frame": "Text",
+        "sensor_mount_roll_deg": "Float",
+        "sensor_mount_pitch_deg": "Float",
+        "sensor_mount_yaw_deg": "Float"
       },
       "output_types": {
         "running": "Bool",
@@ -218,7 +230,11 @@
         "stale_after_seconds": 1.0,
         "robot_length_m": 0.36,
         "robot_width_m": 0.28,
-        "robot_height_m": 0.12
+        "robot_height_m": 0.12,
+        "body_frame": "base_link",
+        "sensor_mount_roll_deg": 0.0,
+        "sensor_mount_pitch_deg": 0.0,
+        "sensor_mount_yaw_deg": 0.0
       }
     },
     "imu_processor": {
